@@ -1,4 +1,17 @@
-# jungle_happy_Scan V3.3
+# jungle_happy_Scan V3.6
+
+当前源码版本：`v3.6.2`。
+
+## V3.6 更新
+
+- 全局使用离线 CodeMirror 6 处理 HTTP 报文编辑、查看、语法高亮、折行、选区和光标，长 Cookie/JWT 单行不再因前后台排版不一致造成光标错位。
+- 扫描引擎采用 Go 并发调度、分层分级扫描和请求预算控制；先进行低成本筛选，再对命中点执行配对确认，避免无差别全量发送 Payload。
+- SQL 注入核心、拓展和时间盲注扫描不再把 Cookie 或普通 Header 作为 SQL 插入点，降低无关请求和误报。
+- 时间盲注支持可配置的对照/延迟 Payload，并通过多次时间差确认，HTTP 200 延迟响应也可作为有效证据。
+- Normal 模式的默认插件可在持久配置中维护并保存；现有配置升级时保留管理员规则和自定义参数。
+- 支持代理导入 PEM/PFX/P12 客户端证书，用于访问需要上游 mTLS 的 HTTPS 站点。
+- 漏洞名称统一优化为“反射型XSS”；证据默认保留原始请求、响应和值，不再以 `<redacted>` 替换。
+- 配置版本自动升级到 31，V3.6 之前的配置文件可直接继续使用，无需手工改写。
 
 V3.3重点优化管理前端性能：人工拦截由200毫秒轮询升级为事件驱动长轮询；资产、扫描进度、漏洞和拦截使用独立Revision，避免一次轻量变化重载整页；长HTTP报文、高亮结果和漏洞证据按接口缓存，进度变化只更新轻量元数据。所有HTTP报文视图固定宽度并自动折行，不再产生横向滚动。创建任务表单压缩为一行主配置，目标URL的Host自动成为作用域；静态资源过滤支持“内置默认后缀＋管理员追加后缀”。V3.2本地恢复、跨任务历史与V2.4扫描内核全部保留。
 
@@ -60,8 +73,8 @@ V1.41 修正多凭据未授权误报，并支持无鉴权字段的必登录接�
 
 将以下两个文件放在同一目录：
 
-- `jungle_happy_Scan-v3.3.tar.gz`
-- `jungle_happy_Scan-v3.3.tar.gz.sha256`（建议一并复制）
+- `jungle_happy_Scan-v3.6.tar.gz`
+- `jungle_happy_Scan-v3.6.tar.gz.sha256`（建议一并复制）
 - `install_jungle_happy_Scan.sh`
 
 执行：
@@ -79,7 +92,7 @@ SCANNER_INSTALL_DIR=/opt/jungle_happy_Scan ./install_jungle_happy_Scan.sh
 
 安装脚本自动识别操作系统和 CPU 架构，选择包内二进制并启动服务。整个安装过程不连接互联网。
 
-从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.5，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
+从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.6，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
 
 页面和健康检查：
 
@@ -119,15 +132,15 @@ export JUNGLE_CONFIG_PASSWORD='替换为高强度密码'
 ./build_release.sh
 ```
 
-脚本使用根目录 `VERSION` 作为唯一版本源，在`bin/`生成Linux AMD64/ARM64、Windows AMD64/ARM64和macOS ARM64静态二进制及SHA-256，在`release/`生成`jungle_happy_Scan-v3.3.tar.gz`，并在`release/minimal_packages/`生成四个Windows/Linux最小包。构建机需要Go，目标部署机不需要。
+脚本使用根目录 `VERSION` 作为唯一版本源，在 `bin/` 生成各平台静态二进制及 SHA-256，在 `release/` 生成完整源码交付包，并在 `release/minimal_packages/` 生成 Linux/Windows 最小包。构建机需要 Go 1.26，目标部署机不需要。
 
 ## 文档
 
 - [HTTP API](docs/API.md)
 - [能力、模式与限制](docs/CAPABILITIES.md)
-- [52 个插件扫描逻辑与持久配置手册](docs/plugins.md)
-- [V3.3 WEB 扫描架构设计](docs/ARCHITECTURE_V3.md)
-- [V3.3 验证矩阵与报告](docs/TESTING_V3.md)
+- [插件扫描逻辑与持久配置手册](docs/plugins.md)
+- [V3 WEB 扫描架构设计](docs/ARCHITECTURE_V3.md)
+- [V3 验证矩阵与报告](docs/TESTING_V3.md)
 - [V2.0 架构设计](docs/ARCHITECTURE_V2.md)
 - [V2.4 验证报告](docs/TESTING_V2.md)
 - [V2 MCP Tool 标准](jungle_happy_scan_MCP_V2.txt)
