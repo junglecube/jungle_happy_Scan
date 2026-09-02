@@ -1,0 +1,159 @@
+jungle_happy_Scan V2.4 单接口同步扫描 MCP Tool 标准
+======================================================
+
+文档版本：2.1
+底层 HTTP：POST http://<scanner-host>:8888/api/v2/jungle_happy_scan
+Lite HTTP：POST http://<scanner-host>:8888/api/v2/jungle_happy_scan_lite
+适用范围：仅限已授权测试环境；调用会发送真实漏洞检测 Payload。
+
+一、Tool 定义
+------------
+
+{
+  "name": "jungle_happy_scan",
+  "title": "jungle_happy_Scan V2 同步漏洞扫描",
+  "description": "对一条 Burp Suite Raw HTTP 报文执行扫描，在一次调用中完成 HTTP→HTTPS 连通性预检、扫描和最终结果返回。只传 http 时默认 normal 和 auto。",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "http": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 5000000,
+        "description": "完整 Burp Suite Raw HTTP 报文。"
+      },
+      "scan_type": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {"type":"string","minLength":1},
+        "description": "省略/空数组为 normal；仅 [passive]、[normal]、[deep] 使用预设；否则传插件 ID。"
+      },
+      "scheme": {
+        "type": "string",
+        "enum": ["auto","http","https"],
+        "default": "auto",
+        "description": "auto 固定先 HTTP，再 HTTPS。"
+      },
+      "host": {
+        "type": "object",
+        "maxProperties": 100,
+        "additionalProperties": {"type":"string","minLength":2},
+        "description": "可选域名到 IP 映射；保留 Host Header 和 TLS SNI。"
+      },
+      "client_tls_file": {
+        "type": "string",
+        "description": "可选；扫描器服务器上的 PEM/PFX/P12 绝对路径。"
+      },
+      "client_tls_password": {
+        "type": "string",
+        "description": "可选；PFX/P12 密码，不持久化。"
+      }
+    },
+    "required": ["http"]
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "api_version": {"const":"2.0"},
+      "rule_pack_version": {"type":"string"},
+      "rule_pack_digest": {"type":"string","pattern":"^sha256:[0-9a-f]{24}$"},
+      "scan": {
+        "type":"object",
+        "additionalProperties":true,
+        "properties": {
+          "scan_id":{"type":"string"},
+          "status":{"type":"string","enum":["completed","failed","cancelled"]},
+          "elapsed_ms":{"type":"integer","minimum":0},
+          "findings_count":{"type":"integer","minimum":0},
+          "error":{"type":"string"},
+          "coverage":{"type":"object"},
+          "progress":{"type":"object"}
+        },
+        "required":["status","elapsed_ms","findings_count","coverage","progress"]
+      },
+      "connectivity": {
+        "type":"object",
+        "additionalProperties":true,
+        "properties": {
+          "ok":{"type":"boolean"},
+          "scheme":{"type":"string","enum":["http","https","auto"]},
+          "auto_fallback":{"type":"boolean"},
+          "elapsed_ms":{"type":"integer","minimum":0},
+          "status_code":{"type":"integer"},
+          "error":{"type":"string"}
+        },
+        "required":["ok","scheme","auto_fallback","elapsed_ms"]
+      },
+      "findings": {
+        "type":"array",
+        "items": {
+          "type":"object",
+          "additionalProperties":false,
+          "properties": {
+            "id":{"type":"string"},
+            "plugin_id":{"type":"string"},
+            "title":{"type":"string"},
+            "severity":{"type":"string","enum":["info","low","medium","high","critical","unknown"]},
+            "severity_label":{"type":"string","enum":["提示","低危","中危","高危","严重"]},
+            "confidence":{"type":"string","enum":["tentative","firm","certain","unknown"]},
+            "confidence_label":{"type":"string","enum":["待确认","较确定","已确认"]},
+            "category":{"type":"string","enum":["confirmed","probable","exposure","informational","unknown"]},
+            "category_label":{"type":"string","enum":["确认漏洞","疑似漏洞","配置暴露","信息提示",""]},
+            "score":{"type":"integer","minimum":0,"maximum":100},
+            "correlation_id":{"type":"string"},
+            "affected":{"type":"string"},
+            "description":{"type":"string"},
+            "remediation":{"type":"string"},
+            "references":{"type":"array","items":{"type":"string"}},
+            "detected_at":{"type":"string","format":"date-time"},
+            "evidence": {
+              "type":"array",
+              "items": {
+                "type":"object",
+                "additionalProperties":true,
+                "properties": {
+                  "summary":{"type":"string"},
+                  "strength":{"type":"string","enum":["L1","L2","L3","L4","L5"]},
+                  "request":{"type":"string"},
+                  "response":{"type":"string"},
+                  "response_status":{"type":"integer"},
+                  "response_excerpt":{"type":"string"},
+                  "response_truncated":{"type":"boolean"},
+                  "metrics":{"type":"object"}
+                },
+                "required":["summary"]
+              }
+            }
+          },
+          "required":["id","plugin_id","title","severity","severity_label","confidence","confidence_label","category","category_label","score","affected","description","remediation","evidence","detected_at"]
+        }
+      }
+    },
+    "required":["api_version","rule_pack_version","rule_pack_digest","scan","connectivity","findings"]
+  }
+}
+
+二、tools/call
+------------
+
+请求：
+
+{
+  "jsonrpc":"2.0",
+  "id":3,
+  "method":"tools/call",
+  "params":{
+    "name":"jungle_happy_scan",
+    "arguments":{
+      "http":"GET /api/user?id=1 HTTP/1.1\r\nHost: test.example.local\r\n\r\n"
+    }
+  }
+}
+
+Adapter 应将 arguments 原样 POST 到 V2 HTTP 接口，HTTP 读取超时建议不少于 600 秒；把 HTTP JSON 同时放入 structuredContent，并在 content 返回同一 JSON 文本。HTTP 200 仍可能包含 scan.status=failed，调用方必须检查 status 与 coverage.complete。
+
+Lite Tool 可命名 jungle_happy_scan_lite，入参 Schema 相同，底层改为 /api/v2/jungle_happy_scan_lite；其 evidence 不包含完整 request/response。

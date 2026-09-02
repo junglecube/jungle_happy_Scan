@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
+  <title>jungle_happy_Scan · V3.6.2</title>
+  <link rel="stylesheet" href="/styles.css?v=3.6.2">
+  <link rel="stylesheet" href="/v11.css?v=3.6.2">
+  <link rel="stylesheet" href="/webscan.css?v=3.6.2">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
+      <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
+      <span><strong>jungle_happy_Scan</strong><small>V3.6.2</small></span>
+    </a>
+    <nav aria-label="主导航">
+      <button class="nav-button active" data-view="proxy">代理设置</button>
+      <button class="nav-button" data-view="assets">接口资产</button>
+      <button class="nav-button" data-view="scan">扫描引擎</button>
+      <button class="nav-button" data-view="settings">持久配置</button>
+      <button class="nav-button" data-view="version">版本更新</button>
+      <button class="nav-button" data-view="guide">使用说明</button>
+    </nav>
+    <div class="health" id="health"><span></span>服务检查中</div>
+  </header>
+
+  <main>
+    <section id="proxy-view" class="view active" aria-label="代理设置">
+      <section id="webscan-config-tab">
+        <div class="webscan-setup-grid">
+        <form id="webscan-form" class="panel webscan-create-card">
+          <div class="panel-heading">
+            <div><span class="step">01</span><h2>创建 WEB 扫描任务</h2></div>
+            <span class="webscan-protocol-note">HTTP / HTTPS 完整捕获 · 支持 mTLS</span>
+          </div>
+          <div class="webscan-form-grid webscan-primary-fields">
+            <label>目标 URL（自动作为扫描作用域）<input id="webscan-target" type="text" placeholder="完整URL；留空或 * 表示全局Passive代理"></label>
+            <label>代理监听地址<input id="webscan-proxy-listen" required value="127.0.0.1:8088" placeholder="127.0.0.1:8088"></label>
+            <label>扫描模式<select id="webscan-mode"><option value="passive" selected>Passive</option><option value="normal">Normal</option></select></label>
+          </div>
+          <div class="webscan-option-row">
+            <label><input id="webscan-auto-scan" type="checkbox" checked> 新接口自动扫描</label>
+            <label><input id="webscan-filter-static" type="checkbox" checked> 过滤静态资源</label>
+          </div>
+          <details class="webscan-advanced-options">
+            <summary>作用域与静态资源高级设置</summary>
+            <div class="webscan-form-grid">
+              <label>附加作用域 Host（每行一个）<textarea id="webscan-scope-hosts" class="mini-textarea" placeholder="仅填写目标 URL 之外仍需扫描的 Host"></textarea><small>目标 URL 的 Host 会自动加入作用域，无需重复填写。</small></label>
+              <label>新增静态资源后缀（每行一个）<textarea id="webscan-static-extensions" class="mini-textarea" placeholder="例如：avif&#10;webp&#10;wasm"></textarea><small>在内置 css、js、图片、字体、map、mp4、webm 后缀基础上追加，不会覆盖默认值。</small></label>
+            </div>
+          </details>
+          <div class="client-tls-row webscan-client-tls">
+            <div class="client-tls-label"><strong>HTTPS 解密与 mTLS</strong><small>先下载并信任 HappyScan 代理 CA；启用后，作用域内 HTTPS 会进入拦截、资产和扫描链路。可选证书用于访问要求 mTLS 的上游网站。</small></div>
+            <label class="webscan-mtls-toggle"><input id="webscan-intercept-tls" type="checkbox"> 解密 HTTPS</label>
+            <a class="text-button webscan-ca-download" href="/api/v3/proxy-ca" download="jungle_happy_Scan-proxy-ca.pem">下载代理 CA</a>
+            <input id="webscan-client-tls-file-input" type="file" accept=".pem,.pfx,.p12,application/x-pem-file,application/x-pkcs12" hidden>
+            <button type="button" class="text-button client-tls-upload" id="webscan-client-tls-upload">导入 mTLS 证书</button>
+            <span id="webscan-client-tls-name" class="client-tls-name">未选择</span>
+            <input id="webscan-client-tls-password" class="client-tls-password hidden" type="password" autocomplete="off" placeholder="PFX/P12 密码（可为空）" aria-label="代理 PFX 或 P12 密码">
+            <button type="button" class="text-button hidden" id="webscan-client-tls-clear">移除</button>
+          </div>
+          <div class="webscan-create-actions">
+            <div class="webscan-proxy-actions">
+              <button class="webscan-intercept-toggle webscan-intercept-action hidden" id="webscan-intercept-request" type="button" aria-pressed="false">拦截请求</button>
+              <button class="webscan-intercept-toggle webscan-intercept-action hidden" id="webscan-intercept-response" type="button" aria-pressed="false">拦截响应</button>
+              <button class="primary-button webscan-proxy-toggle" id="webscan-create-button" type="submit">启动代理</button>
+            </div>
+          </div>
+        </form>
+        </div>
+
+        <section id="webscan-runtime" class="hidden">
+          <div class="webscan-metrics" aria-label="WEB扫描概览">
+          <div class="panel"><span>代理状态</span><strong id="webscan-metric-status">—</strong></div>
+          <div class="panel"><span>捕获请求</span><strong id="webscan-metric-observed">0</strong></div>
+          <div class="panel"><span>去重接口</span><strong id="webscan-metric-assets">0</strong></div>
+          <div class="panel"><span>漏洞发现</span><strong id="webscan-metric-findings">0</strong></div>
+          </div>
+
+          <section id="webscan-interception-panel" class="panel webscan-interception-panel hidden">
+          <div class="webscan-assets-head webscan-interceptor-head">
+            <div><p class="eyebrow">HTTP INTERCEPTOR</p><h2>HTTP 拦截工作台</h2></div>
+            <div class="webscan-interceptor-controls">
+              <span id="webscan-interception-summary">0 个等待处理</span>
+              <button id="webscan-interception-forward" type="button" class="primary-button webscan-intercept-action" disabled>Forward</button>
+              <button id="webscan-interception-drop" type="button" class="danger-button webscan-intercept-action" disabled>Drop</button>
+            </div>
+          </div>
+          <div class="webscan-interception-editor">
+            <div id="webscan-interception-meta" class="webscan-interception-meta">等待 HTTP 报文…</div>
+            <div id="webscan-interception-raw" class="cm-http-editor" aria-label="代理拦截 HTTP 报文"></div>
+          </div>
+          </section>
+        </section>
+      </section>
+    </section>
+
+    <section id="assets-view" class="view" aria-label="接口资产">
+      <section id="webscan-assets-tab">
+        <div class="webscan-assets-layout">
+          <section class="panel webscan-assets-card">
+            <div class="webscan-assets-head">
+              <div><p class="eyebrow">INTERFACE ASSETS</p><h2>接口资产</h2></div>
+              <div class="webscan-filters">
+                <input id="webscan-asset-search" type="search" placeholder="搜索 Host、路径或方法">
+                <select id="webscan-asset-status"><option value="">全部状态</option><option value="observed">待扫描</option><option value="queued">排队中</option><option value="running">扫描中</option><option value="completed">已完成</option><option value="failed">失败</option><option value="skipped">已跳过</option></select>
+                <button type="button" id="webscan-clear-history" class="webscan-clear-history">清空历史资产</button>
+              </div>
+            </div>
+            <div class="webscan-table-wrap">
+              <table class="webscan-assets-table">
+                <thead><tr><th>方法</th><th>Host</th><th>路径</th><th>类型</th><th>返回长度</th><th>捕获</th><th>扫描状态</th><th>请求进度</th><th>漏洞数量</th><th>最后发现</th></tr></thead>
+                <tbody id="webscan-assets-body"><tr><td colspan="10" class="webscan-table-empty">等待浏览器流量…</td></tr></tbody>
+              </table>
+            </div>
+            <div class="webscan-pagination" id="webscan-assets-pagination">
+              <button type="button" id="webscan-assets-prev">上一页</button>
+              <span id="webscan-assets-page-label">第 1 页 · 0 条接口</span>
+              <button type="button" id="webscan-assets-next">下一页</button>
+            </div>
+            <section id="webscan-detail-space" class="webscan-detail-space" aria-label="接口详情">
+              <div id="webscan-detail-placeholder" class="webscan-detail-placeholder"><strong>接口详情</strong><p>点击上方接口，在此查看请求、返回和漏洞证据。</p></div>
+              <aside id="webscan-asset-detail-card" class="webscan-asset-detail hidden">
+                <div class="webscan-detail-toolbar"><button type="button" class="test-button hidden" id="webscan-copy-request">复制报文</button><button type="button" class="test-button hidden" id="webscan-scan-asset">发送到扫描引擎</button></div>
+                <div id="webscan-detail-content" class="hidden">
+                  <div class="webscan-detail-pair">
+                    <section><h3>请求</h3><div id="webscan-detail-request" class="webscan-http-detail cm-http-viewer"></div></section>
+                    <section><h3>响应</h3><div id="webscan-detail-response" class="webscan-http-detail cm-http-viewer"></div></section>
+                  </div>
+                  <section class="webscan-detail-findings-section">
+                    <h3>漏洞 <span id="webscan-detail-finding-count">0</span></h3>
+                    <div id="webscan-detail-findings" class="webscan-detail-findings"></div>
+                  </section>
+                </div>
+              </aside>
+            </section>
+          </section>
+        </div>
+
+        <section class="webscan-report-section">
+          <div class="results-heading"><div><p class="eyebrow">SITE FINDINGS</p><h2>漏洞汇总</h2></div><span id="webscan-report-summary">0 个发现</span></div>
+          <div id="webscan-report-groups" class="webscan-report-groups"><div class="empty-result"><strong>暂未发现漏洞</strong><p>接口完成扫描后，站点级漏洞结果会在这里汇总。</p></div></div>
+          <div id="webscan-report-interfaces" class="webscan-report-interfaces hidden"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="scan-view" class="view" aria-label="扫描引擎">
+      <div class="scan-grid">
+        <section class="panel request-panel">
+          <div class="panel-heading">
+            <div><span class="step">01</span><h2>请求报文</h2></div>
+            <div class="request-tools">
+              <div class="http-history-tools" aria-label="报文历史">
+                <button type="button" class="history-button" id="http-history-back" aria-label="上一份报文" title="上一份报文">&lt;</button>
+                <button type="button" class="history-button" id="http-history-forward" aria-label="下一份报文" title="下一份报文">&gt;</button>
+              </div>
+              <select id="request-scheme" aria-label="请求协议"><option value="auto">自动协议</option><option value="http">HTTP</option><option value="https">HTTPS</option></select>
+              <div class="replay-split">
+                <button class="test-button replay-main" id="connectivity-button">发送</button>
+                <button class="test-button replay-menu-button" id="replay-menu-button" aria-label="选择重放模式">▾</button>
+                <div class="replay-menu hidden" id="replay-menu">
+                  <button type="button" data-replay-mode="single">发送</button>
+                  <button type="button" data-replay-mode="brute">爆破</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="http-editor" id="http-editor">
+            <div id="http-request" class="cm-http-editor" aria-label="Burp Suite HTTP 报文"></div>
+          </div>
+          <div id="brute-options" class="brute-options hidden">
+            <label>并发数<input id="brute-concurrency" type="number" min="1" max="100" value="10"></label>
+            <label>无占位重复次数<input id="brute-repeat" type="number" min="1" max="20000" value="10"></label>
+            <label>最多请求数<input id="brute-max-requests" type="number" min="1" max="20000" value="10000"></label>
+            <label class="dictionary-upload">字典 TXT<input id="brute-dictionary-file" type="file" accept=".txt,text/plain"></label>
+            <span id="brute-dictionary-meta">未选择字典</span>
+          </div>
+          <div class="client-tls-row">
+            <div class="client-tls-label"><strong>客户端 TLS 证书</strong><small>可选，仅 HTTPS/mTLS 使用；支持含证书链和私钥的 PEM，或 PFX/P12</small></div>
+            <input id="client-tls-file-input" type="file" accept=".pem,.pfx,.p12,application/x-pem-file,application/x-pkcs12" hidden>
+            <button type="button" class="text-button client-tls-upload" id="client-tls-upload">上传证书</button>
+            <span id="client-tls-name" class="client-tls-name">未选择</span>
+            <input id="client-tls-password" class="client-tls-password hidden" type="password" autocomplete="off" placeholder="PFX/P12 密码（可为空）" aria-label="PFX 或 P12 密码">
+            <button type="button" class="text-button hidden" id="client-tls-clear">移除</button>
+          </div>
+          <div class="request-footer"><span id="request-size">0 字符</span><span id="parse-result">等待输入</span></div>
+        </section>
+
+        <section class="panel response-panel">
+          <div class="panel-heading">
+            <div><span class="step">02</span><h2>返回报文</h2></div>
+            <span id="replay-status" class="response-meta">等待发送</span>
+          </div>
+          <div id="response-placeholder" class="http-editor response-placeholder" aria-label="等待返回报文">
+            <pre>等待发送 HTTP 请求…</pre>
+          </div>
+          <div id="connectivity-result" class="connectivity-result hidden" aria-live="polite">
+            <div class="connectivity-head"><strong id="connectivity-title">原始报文 Response</strong><span id="connectivity-meta"></span></div>
+            <div id="connectivity-response" class="cm-http-viewer"></div>
+          </div>
+          <div id="brute-result" class="brute-result hidden">
+            <div class="brute-summary" id="brute-summary"></div>
+            <div class="brute-table-wrap">
+              <table class="brute-table">
+                <thead><tr><th>#</th><th>Payload</th><th>Status</th><th>Size</th><th>Time</th></tr></thead>
+                <tbody id="brute-result-rows"></tbody>
+              </table>
+            </div>
+            <div class="brute-pager"><button id="brute-prev" class="text-button">上一页</button><span id="brute-page">1 / 1</span><button id="brute-next" class="text-button">下一页</button></div>
+            <div id="brute-response-detail" class="brute-response-detail cm-http-viewer"></div>
+          </div>
+        </section>
+
+        <section class="panel plugin-panel">
+          <div class="panel-heading plugin-heading">
+            <div><span class="step">03</span><h2>漏洞类型</h2></div>
+            <div class="scan-mode-control" role="radiogroup" aria-label="扫描模式">
+              <span class="mode-caption">扫描模式</span>
+              <button type="button" class="mode-option passive" data-mode="passive" role="radio" aria-checked="false" aria-label="Passive 模式"><span class="mode-dot"></span><b>Passive</b></button>
+              <button type="button" class="mode-option normal active" data-mode="normal" role="radio" aria-checked="true" aria-label="Normal 模式"><span class="mode-dot"></span><b>Normal</b></button>
+              <button type="button" class="mode-option deep" data-mode="deep" role="radio" aria-checked="false" aria-label="Deep 模式"><span class="mode-dot"></span><b>Deep</b></button>
+              <button type="button" class="mode-option custom" data-mode="custom" role="radio" aria-checked="false" aria-label="Custom 模式"><span class="mode-dot"></span><b>Custom</b></button>
+            </div>
+          </div>
+          <p id="scan-mode-help" class="scan-mode-help"><strong>Normal</strong>：常见高价值插件预设，可继续手动增减。</p>
+          <div id="plugin-list" class="plugin-list" aria-live="polite"><div class="skeleton">正在载入插件…</div></div>
+          <div class="scan-action">
+            <div><strong id="selected-count">0 项已选择</strong><small>主动插件会真实发送变异请求</small></div>
+            <button class="primary-button" id="scan-button">开始扫描 <span>→</span></button>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel progress-panel hidden" id="progress-panel" aria-live="polite">
+        <div class="progress-header">
+          <div><span class="status-pill" id="status-pill">排队中</span><h2 id="progress-title">扫描任务</h2><p id="progress-meta">正在准备…</p></div>
+          <button class="danger-button" id="cancel-button">取消任务</button>
+        </div>
+        <div class="progress-track"><span id="progress-bar"></span></div>
+        <div class="metrics">
+          <div><strong id="metric-percent">0%</strong><span>总体进度</span></div>
+          <div><strong id="metric-requests">0</strong><span>已发请求</span></div>
+          <div><strong id="metric-findings">0</strong><span>发现问题</span></div>
+          <div><strong id="metric-time">0s</strong><span>扫描耗时</span></div>
+        </div>
+        <div id="plan-summary" class="plan-summary hidden"></div>
+        <div id="plugin-progress" class="plugin-progress" aria-label="逐插件请求进度"></div>
+      </section>
+
+      <section class="results-section hidden" id="results-section">
+        <div class="results-heading"><div><p class="eyebrow">SCAN RESULT</p><h2>漏洞结果</h2></div><span id="result-summary"></span></div>
+        <div id="correlations" class="correlations"></div>
+        <div id="findings" class="findings"></div>
+      </section>
+    </section>
+
+    <section id="settings-view" class="view" aria-labelledby="settings-title">
+      <div class="page-heading settings-heading">
+        <div><p class="eyebrow">PERSISTENT SETTINGS</p><h1 id="settings-title">扫描器配置</h1></div>
+        <p>保存后立即原子写入服务器配置文件，新扫描任务自动使用；监听地址变更需要重启服务。</p>
+      </div>
+      <form id="settings-form">
+        <div class="settings-grid">
+          <section class="panel settings-card">
+            <div class="panel-heading"><div><span class="step">A</span><h2>服务与目标</h2></div></div>
+            <div class="form-grid">
+              <label>监听地址<input id="cfg-listen" required></label>
+              <label>传输兼容模式<select id="cfg-transport"><option value="normalized">Normalized（推荐）</option><option value="force_http1">强制 HTTP/1.1</option><option value="raw_http1">Raw HTTP/1.1</option></select></label>
+              <label>HTTP 代理<input id="cfg-proxy" placeholder="http://127.0.0.1:8081"></label>
+              <label class="full">目标白名单（每行一个，留空时仅允许报文 Host）<textarea class="mini-textarea" id="cfg-hosts"></textarea></label>
+            </div>
+            <div class="toggle-grid">
+              <label><input type="checkbox" id="cfg-verify-tls"> 校验 TLS 证书</label>
+              <label><input type="checkbox" id="cfg-redirects"> 跟随同白名单重定向</label>
+              <label><input type="checkbox" id="cfg-private"> 允许私网目标</label>
+              <label><input type="checkbox" id="cfg-auth-expected"> 接口默认必须登录</label>
+              <label><input type="checkbox" id="cfg-redact"> 结果证据自动脱敏</label>
+            </div>
+          </section>
+
+	          <section class="panel settings-card">
+	            <div class="panel-heading"><div><span class="step">J</span><h2>Normal 默认插件</h2></div></div>
+	            <p class="card-help">每行填写一个插件 ID。Normal 模式会自动勾选被动插件和这里列出的主动插件；留空表示不额外启用主动插件。</p>
+	            <textarea class="rule-textarea session-keys-textarea" id="cfg-normal-plugins" spellcheck="false" placeholder="sqli&#10;reflected_xss&#10;unauthorized"></textarea>
+          </section>
+
+          <section class="panel settings-card">
+            <div class="panel-heading"><div><span class="step">B</span><h2>性能与任务</h2></div></div>
+            <div class="form-grid">
+              <label>请求超时（秒）<input type="number" id="cfg-timeout" min="1" max="120"></label>
+	              <label>最大并发<input type="number" id="cfg-concurrency" min="1" max="100"></label>
+	              <label>同时扫描任务<input type="number" id="cfg-active-scans" min="1" max="100"></label>
+	              <label>最大排队任务<input type="number" id="cfg-queued-scans" min="1" max="10000"></label>
+	              <label>每秒请求数<input type="number" id="cfg-rps" min="0.1" max="500" step="0.1"></label>
+	              <label>进程全局最大并发<input type="number" id="cfg-global-concurrency" min="1" max="1000"></label>
+	              <label>单目标最大并发<input type="number" id="cfg-host-concurrency" min="1" max="1000"></label>
+	              <label>进程全局每秒请求<input type="number" id="cfg-global-rps" min="0.1" max="5000" step="0.1"></label>
+              <label>单任务最大请求<input type="number" id="cfg-max-requests" min="1" max="20000"></label>
+              <label>最大响应字节<input type="number" id="cfg-max-response" min="10000" max="50000000"></label>
+              <label>基线采样次数<input type="number" id="cfg-baselines" min="1" max="3"></label>
+              <label>结果内存保留（分钟）<input type="number" id="cfg-ttl" min="1" max="1440"></label>
+              <label>单来源每分钟任务<input type="number" id="cfg-scans-minute" min="1" max="10000"></label>
+            </div>
+            <div class="toggle-grid"><label><input type="checkbox" id="cfg-shared-mode"> 共享服务安全模式</label></div>
+          </section>
+
+	          <section class="panel settings-card">
+            <div class="panel-heading"><div><span class="step">C</span><h2>会话标识 Key</h2></div></div>
+            <p class="card-help">每行填写一个 Key，不区分大小写，也不需要指定位置。未授权插件会自动在 Cookie、Header、GET Query、POST Form、multipart 和 JSON 中查找；JSON 支持对象、嵌套对象、数组和数组内嵌套对象。</p>
+            <textarea class="rule-textarea session-keys-textarea" id="cfg-session-keys" spellcheck="false" placeholder="cookie&#10;Authorization&#10;token&#10;accessToken&#10;des_sessionId&#10;sessionId"></textarea>
+	          </section>
+
+
+	          <section class="panel settings-card">
+	            <div class="panel-heading"><div><span class="step">D</span><h2>身份、CSRF 与扫描排除</h2></div></div>
+	            <div class="form-grid">
+	              <label class="full">CSRF Header 名（每行一个）<textarea class="mini-textarea" id="cfg-csrf-headers"></textarea></label>
+	              <label class="full">不参与扫描的参数名（每行一个，不区分大小写）<textarea class="mini-textarea" id="cfg-excluded-params" placeholder="content_string&#10;signature_raw"></textarea></label>
+            </div>
+	            <p class="card-help">命中的参数无论位于 Query、Form、JSON（含数组和嵌套对象）、Multipart、Cookie 或主动扫描 Header，都不会成为 Payload 变异点；其内部嵌套 JSON/XML/Base64 内容也不会继续展开。</p>
+          </section>
+
+          <section class="panel settings-card">
+            <div class="panel-heading"><div><span class="step">H</span><h2>协议适配与服务边界</h2></div></div>
+            <p class="card-help">可扫描 Header 会作为主动变异插入点；共享服务模式要求目标白名单非空。配置写入 CIDR 留空表示兼容允许所有来源，生产共享部署建议只填写管理网段。</p>
+            <div class="form-grid">
+              <label>主动扫描 Header（每行一个）<textarea class="mini-textarea tall" id="cfg-scan-headers"></textarea></label>
+              <label>配置写入允许 CIDR（每行一个）<textarea class="mini-textarea tall" id="cfg-config-cidrs" placeholder="127.0.0.1/32&#10;10.0.0.0/8"></textarea></label>
+            </div>
+          </section>
+
+          <section class="panel settings-card">
+            <div class="panel-heading"><div><span class="step">I</span><h2>动态签名与会话刷新</h2></div></div>
+            <p class="card-help">请求变换支持 timestamp、uuid、regex_replace、sha256、hmac-sha256、base64；响应提取可刷新 Header、Query、JSON、Cookie、Form 或 Multipart 字段，且不会重排无关字段。每项均为 JSON 数组，留空请填写 <code>[]</code>。</p>
+            <div class="rule-grid">
+              <label>请求动态变换 JSON<textarea class="rule-textarea" id="cfg-request-transforms" spellcheck="false"></textarea></label>
+              <label>响应提取规则 JSON<textarea class="rule-textarea" id="cfg-response-extractors" spellcheck="false"></textarea></label>
+            </div>
+          </section>
+
+	          <section class="panel settings-card">
+	            <div class="panel-heading"><div><span class="step">E</span><h2>离线回连</h2></div></div>
+            <div class="form-grid">
+              <label class="full">回连监听地址（修改后需重启）<input id="cfg-callback-listen" placeholder="0.0.0.0:61166"></label>
+	              <label class="full">目标可访问的回连基础地址<input id="cfg-callback" placeholder="http://121.43.208.121:61166"></label>
+	              <label class="full">LDAP/JNDI 监听地址（修改后需重启）<input id="cfg-callback-ldap-listen" placeholder="0.0.0.0:61167"></label>
+	              <label class="full">目标可访问的 LDAP 基础地址<input id="cfg-callback-ldap" placeholder="ldap://121.43.208.121:61167"></label>
+	              <label class="full">LDAP/JNDI 最大并发连接（修改后需重启）<input id="cfg-callback-max-connections" type="number" min="1" max="4096"></label>
+            </div>
+	            <p class="card-help">HTTP 回连默认监听 61166，LDAP/JNDI 安全接收器默认监听 61167；基础地址应填写目标服务器能够访问的扫描器 IP 或域名。两类监听器只接收一次性 Token，LDAP 端不返回远程类或对象。</p>
+	          </section>
+
+          <section class="panel settings-card full-card rule-editor-card">
+            <div class="panel-heading"><div><span class="step">G</span><h2>插件 Payload 与检测规则</h2></div><span class="rule-status" id="rule-status">读取中</span></div>
+            <p class="card-help">选择插件后直接编辑。Payload 支持占位符 <code>{{value}}</code>、<code>{{token}}</code>、<code>{{host}}</code>、<code>{{callback}}</code>、<code>{{root}}</code>；新增项保持相同 JSON 字段即可。保存配置后新扫描立即生效。</p>
+            <div class="rule-toolbar"><label>漏洞插件<select id="cfg-rule-plugin"></select></label><button type="button" class="text-button" id="format-rule-json">格式化 JSON</button></div>
+            <div class="rule-grid">
+              <label>参数名（每行一个）<textarea class="rule-textarea small" id="cfg-rule-parameters"></textarea></label>
+              <label>URL 关键字（每行一个）<textarea class="rule-textarea small" id="cfg-rule-url-keywords"></textarea></label>
+              <label>同源探测路径（每行一个）<textarea class="rule-textarea small" id="cfg-rule-paths"></textarea></label>
+              <label>Payload JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-payloads" spellcheck="false"></textarea></label>
+              <label>检测正则 JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-patterns" spellcheck="false"></textarea></label>
+            </div>
+          </section>
+
+	          <section class="panel settings-card">
+	            <div class="panel-heading"><div><span class="step">F</span><h2>响应语义</h2></div></div>
+            <p class="card-help">动态响应归一化正则仅用于扫描器内部的响应相似度比较：时间戳、requestId、traceId、nonce 等每次变化的内容会先替换为统一占位符，从而降低动态接口误报；不会修改或保存目标的真实响应。每行填写一条正则。</p>
+            <div class="form-grid">
+              <label class="full">业务成功正则（每行一个）<textarea class="mini-textarea tall" id="cfg-success"></textarea></label>
+              <label class="full">登录/授权失败正则（每行一个）<textarea class="mini-textarea tall" id="cfg-denied"></textarea></label>
+              <label>前台数据库报错特征默认可信度
+                <select id="cfg-sqli-error-confidence">
+                  <option value="tentative">待确认</option>
+                  <option value="firm">较确定（推荐）</option>
+                  <option value="certain">已确认</option>
+                </select>
+              </label>
+              <label class="full">数据库报错特征（每行一个正则）<textarea class="mini-textarea tall" id="cfg-sqli-errors" placeholder="(?i)syntax error&#10;ORA-\d{5}"></textarea></label>
+              <label class="full">动态响应归一化正则（每行一个）<textarea class="mini-textarea tall" id="cfg-dynamic"></textarea></label>
+            </div>
+          </section>
+        </div>
+        <div class="save-bar">
+          <div><strong>配置文件</strong><span id="config-path">读取中…</span></div>
+          <div class="save-controls"><input type="password" id="cfg-password" autocomplete="current-password" placeholder="输入配置保存密码" aria-label="配置保存密码"><button class="primary-button" type="submit">保存配置</button></div>
+        </div>
+      </form>
+    </section>
+
+    <section id="version-view" class="view" aria-labelledby="version-title">
+      <div class="page-heading version-heading">
+        <div><p class="eyebrow">RELEASE HISTORY</p><h1 id="version-title">版本更新</h1></div>
+	        <p>记录 jungle_happy_Scan 从单报文准确率内核演进到浏览器流量驱动的 WEB 扫描平台。</p>
+      </div>
+
+      <div class="release-summary panel">
+	        <div><span>当前版本</span><strong>V3.6.2</strong></div>
+        <div><span>实现语言</span><strong>Go 1.26</strong></div>
+	        <div><span>漏洞插件</span><strong>52 个</strong></div>
+        <div><span>运行依赖</span><strong>零依赖</strong></div>
+      </div>
+
+	      <div class="release-timeline">
+	        <article class="release-card current">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.2</h2></div><time datetime="2026-08-31">2026-08-31</time></header>
+	            <p class="release-lead">Normal 默认扫描收敛为九项常用高价值插件，并统一其漏洞告警等级。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.2 扫描配置流程">
+	              <span>浏览器信任代理 CA</span><b>→</b><span>HTTPS CONNECT</span><b>→</b><span>作用域内解密</span><b>→</b><span>mTLS 上游握手</span><b>→</b><span>捕获与扫描</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>CodeMirror 报文编辑</h3><ul>
+	                <li>请求编辑、代理拦截和主要 HTTP 查看器使用同一文档与折行引擎，长 Cookie 不再出现鼠标、光标和输入位置错位。</li>
+	                <li>保留搜索、撤销/重做、行号、自动折行与超大报文低开销展示。</li>
+	              </ul></section>
+	              <section><h3>HTTPS / mTLS 代理</h3><ul>
+	                <li>下载并信任本地代理 CA 后，作用域内 HTTPS 请求会进入资产、拦截与扫描流水线。</li>
+	                <li>可导入含私钥的 PEM 或 PFX/P12，上游访问要求 mTLS 的网站时自动携带该证书；密码不保存。</li>
+	              </ul></section>
+	              <section><h3>短信接口识别</h3><ul>
+	                <li><code>sms_abuse</code> 现在同时要求手机号参数与 URL 关键字命中，默认关键字是 <code>send</code>。</li>
+	                <li>持久规则可新增 <code>message</code> 等关键字，避免普通 <code>update?phone=</code> 被误判。</li>
+	              </ul></section>
+	              <section><h3>Normal 默认策略</h3><ul>
+	                <li>默认勾选 SQL 注入、SQL 注入扩展差分、文件上传、任意文件读取、反射型 XSS、未授权访问、XXE、短信轰炸/喷洒和敏感信息泄露。</li>
+	                <li>对应告警等级统一为高危、高危、低危、高危、低危、中危、高危、高危和低危；已保存的自定义 <code>normal_plugins</code> 不会被覆盖。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><h2>V3.3</h2></div><time datetime="2026-08-01">2026-08-01</time></header>
+	            <p class="release-lead">前端性能内核升级：资产与拦截均由事件通知即时刷新，历史第一页使用增量时间索引，漏洞汇总、插件、配置和手册按需加载，并对超长报文采用低成本渲染。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.3增量前端架构">
+	              <span>代理事件</span><b>→</b><span>长轮询通知</span><b>→</b><span>细粒度Revision</span><b>→</b><span>局部数据加载</span><b>→</b><span>缓存DOM更新</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>资产工作区重排</h3><ul>
+	                <li>顶部主导航将 WEB 扫描直接拆分为“代理设置”和“接口资产”两个一级页面；资产页默认每页 10 条记录。</li>
+	                <li>选择接口仅刷新表格下方独立详情区，不再把详情插入表格或改变当前资产行的位置；漏洞汇总固定置于资产页末尾。</li>
+	                <li>资产列表以“漏洞数量”直接展示该接口的发现数，替代容易与详情混淆的“最高风险”。</li>
+	              </ul></section>
+	              <section><h3>拦截事件驱动</h3><ul>
+	                <li>取消开启拦截后的200毫秒固定轮询；无新报文时保持一个有界长轮询，新请求或响应到达后立即唤醒。</li>
+	                <li>拦截列表只传输待处理摘要，Raw报文仍按单条ID读取；队列无变化时不重复写入大文本编辑器。</li>
+	              </ul></section>
+	              <section><h3>局部刷新与渲染缓存</h3><ul>
+	                <li>任务状态拆分为资产、扫描进度、漏洞和拦截Revision；进度变化不再强制重载漏洞汇总或完整接口详情。</li>
+	                <li>历史资产按最近出现时间维护增量索引，无筛选第一页只读取最新10项，接近O(10)，不再每次O(N log N)排序。</li>
+	                <li>漏洞汇总默认只加载类型计数，点击后才加载受影响接口；代理设置、扫描插件、配置和使用手册均按页面懒加载。</li>
+	                <li>已打开接口的大请求、长JSP响应和漏洞证据只在内容真正变化时重新高亮；普通进度更新仅修改状态与数字。</li>
+	                <li>超过500KB的完整报文降级为单层纯文本DOM，保留内容并避免海量语法节点阻塞页面。</li>
+	                <li>扫描引擎、接口详情、拦截工作台及漏洞证据中的长HTTP行统一在固定宽度内自动换行，不再要求横向滚动。</li>
+	              </ul></section>
+	              <section><h3>紧凑任务配置</h3><ul>
+	                <li>目标URL、代理监听地址和扫描模式合并为同一行；目标URL的Host自动成为精确作用域，附加Host收纳到高级设置。</li>
+	                <li>静态资源过滤保留内置后缀，并支持管理员逐行或逗号追加自定义后缀；输入仅作为增量，不会覆盖默认规则。</li>
+	              </ul></section>
+	              <section><h3>接口资产与报文视觉</h3><ul>
+	                <li>接口详情改为选中行正下方的原地展开，不再跳到整张资产表底部；删除重复的接口摘要卡片。</li>
+	                <li>请求与返回并排展示，漏洞证据默认折叠；顶部代理状态和三个计数统一为“标签＋数值”单行布局。</li>
+	                <li>HTTP起始行、Header和Body保留关键字颜色，但底色统一为浅黄色。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><h2>V3.2</h2></div><time datetime="2026-07-30">2026-07-30</time></header>
+	            <p class="release-lead">围绕长时间浏览器代理使用重构任务可靠性与前端性能：目标外流量安全旁路、任务本地恢复、分页和增量刷新，并将站点报告的完整HTTP证据按接口归一化为一份。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.2可靠WEB扫描架构">
+	              <span>浏览器</span><b>→</b><span>转发/测试作用域</span><b>→</b><span>内存热索引</span><b>→</b><span>压缩恢复文件</span><b>→</b><span>分页增量UI</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>可靠任务与崩溃恢复</h3><ul>
+	                <li>浏览器刷新、休眠、后台冻结和心跳丢失不再关闭代理或删除记录；关闭代理只停止监听，接口与漏洞继续保留。</li>
+	                <li>历史资产默认跨任务持久展示，关闭浏览器或重启进程后仍可查看；只有连续两次确认“清空历史资产”才删除本地全部接口与漏洞记录。</li>
+	                <li>任务元数据和每个接口的代表性报文、基线及Finding异步写入本地压缩恢复文件；重启后恢复为已停止任务，未完成主动扫描不会自动重放。</li>
+	              </ul></section>
+	              <section><h3>转发与测试作用域分离</h3><ul>
+	                <li>本机环回代理允许目标外HTTP和CONNECT直接通过，但不缓存、不拦截、不建资产、不扫描；指定目标及附加Host才进入测试范围。</li>
+	                <li>远程监听继续拒绝目标外流量，避免无认证代理变成内网开放代理；空目标或星号仍只允许全局Passive。</li>
+	              </ul></section>
+	              <section><h3>大流量前端性能</h3><ul>
+	                <li>接口资产由后端分页和筛选，默认每页50条；任务Revision未变化时不重建列表，空闲轮询降频，后台页面暂停刷新。</li>
+	                <li>人工拦截开启时使用200毫秒轻量摘要轮询，新等待项出现后才读取单条Raw报文；资产和报告继续低频增量刷新。</li>
+	                <li>命令注入补齐管道、逻辑或、逻辑与、换行、反引号与美元括号命令替换；离线回连可覆盖 <code>backuppath=`curl ...`</code> 一类路径参数Shell执行。</li>
+	                <li>任务接口不再每秒返回完整漏洞证据；站点报告先加载轻量摘要，只在选择接口时懒加载一份代表性请求和响应。</li>
+	              </ul></section>
+	              <section><h3>可用性</h3><ul>
+	                <li>接口详情提供“复制报文”，可直接复制Burp格式Raw HTTP请求。</li>
+	                <li>站点报告按漏洞类型和接口聚合，每条漏洞保留结论、可信度、说明与修复建议，避免重复渲染相同大报文。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><h2>V3.1</h2></div><time datetime="2026-07-29">2026-07-29</time></header>
+	            <p class="release-lead">在 V3.0 浏览器代理之上增加完整的普通 HTTP 双向人工拦截：请求和响应均可查看、编辑并通过 Forward 放行或通过 Drop 丢弃。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.1 HTTP拦截架构">
+	              <span>浏览器</span><b>→</b><span>请求拦截</span><b>→</b><span>目标系统</span><b>→</b><span>响应拦截</span><b>→</b><span>浏览器</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>双向拦截工作台</h3><ul>
+	                <li>请求和响应拥有独立开关，待处理队列实时展示方向、URL、状态、截止时间和编辑能力。</li>
+	                <li>Raw 报文使用 Burp 风格的 Forward 和 Drop；Forward 提交编辑器当前内容，修改请求会重新解析并校验作用域，修改响应会校验状态行和 Header。</li>
+	              </ul></section>
+	              <section><h3>资源与失败边界</h3><ul>
+	                <li>默认等待 60 秒并自动丢弃，单任务最多 50 条待处理、保留 250 条内存历史、单条可编辑报文上限 10MB。</li>
+	                <li>关闭拦截开关或代理会释放等待项；超限报文、流式响应、WebSocket 和不可安全编辑的二进制采用受控旁路。</li>
+	              </ul></section>
+	              <section><h3>HTTPS / mTLS 边界</h3><ul>
+	                <li>HTTPS 与 mTLS 继续由浏览器完成 TLS 握手，HappyScan 仅 CONNECT 透传，因此无需把客户端私钥交给代理。</li>
+	                <li>未启用受信任 CA 的情况下不伪造“已拦截 HTTPS”；TLS 明文修改不属于本版本能力。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><h2>V3.0</h2></div><time datetime="2026-07-29">2026-07-29</time></header>
+	            <p class="release-lead">在完整保留 V2.4 单报文扫描内核和 API 的基础上，新增浏览器流量驱动的 WEB 扫描工作流：管理员创建会话、手工配置浏览器代理、浏览授权测试系统，HappyScan 自动发现、去重并扫描 HTTP 接口。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.0 WEB扫描架构">
+	              <span>浏览器</span><b>→</b><span>会话代理</span><b>→</b><span>作用域与去重</span><b>→</b><span>接口资产</span><b>→</b><span>V2.4 扫描内核</span><b>→</b><span>站点报告</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>浏览器代理接入</h3><ul>
+	                <li>采用浏览器通用的手工代理方式，不依赖 Chrome、扩展或专用浏览器；每个 WEB 会话拥有独立代理监听端口。</li>
+	                <li>HTTP 请求可完整捕获和主动扫描；HTTPS CONNECT 只进行透明隧道转发，在没有受信任 HappyScan CA 时不声称已解密、捕获或扫描。</li>
+	                <li>创建会话时同步绑定端口，端口冲突立即返回；删除会话会关闭监听器并释放会话资源。</li>
+	              </ul></section>
+	              <section><h3>接口资产与结构去重</h3><ul>
+	                <li>按照方法、Host、规范化路径、Content-Type 和参数结构生成接口指纹；数字、UUID、长十六进制路径段使用类型占位符归一化。</li>
+	                <li>Query、JSON、Form 和 Multipart 仅使用字段结构参与指纹，Cookie、Token、请求 ID 和具体业务值不会造成重复接口。</li>
+	                <li>重复流量更新捕获次数、最后发现时间和代表样本，不会为正在排队、扫描或已完成的同一接口重复创建任务。</li>
+	              </ul></section>
+	              <section><h3>扫描调度与结果汇总</h3><ul>
+	                <li>代理层只负责捕获、作用域、过滤和去重，代表报文继续投递给 V2.4 引擎，复用全部插件、持久配置、预算、限流、覆盖率与证据规则。</li>
+	                <li>支持新接口自动扫描和单接口手动重扫；页面展示代理状态、捕获请求、去重接口、逐接口请求进度、最高风险和站点漏洞报告。</li>
+	                <li>V3 REST API 为纯增量接口，现有 V1/V2 单报文接口、同步接口及“单报文扫描”页面保持兼容。</li>
+	              </ul></section>
+	              <section><h3>资源与安全边界</h3><ul>
+	                <li>会话、代表样本、扫描关联和结果使用有界内存，不引入数据库，进程重启或管理员删除任务后记录消失。</li>
+	                <li>严格执行精确 Host 作用域、静态资源过滤、5 MiB 捕获上限、接口数量上限和仅淘汰非扫描资产的 LRU 策略。</li>
+	                <li>自动扫描复用现有全局队列、并发、目标限流和请求预算；移除逐跳代理头，证书密码与代理凭据不会写入接口资产。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V2.4</h2></div><time datetime="2026-07-28">2026-07-28</time></header>
+	            <p class="release-lead">本版本只专注 SQL 注入：重构单引号筛选、上下文选择、A-B-B-A Oracle、响应差分、预算与覆盖率，使 Spring/Spring Boot、MyBatis、存储过程、CTP、JSP 以及 MySQL、PostgreSQL/GaussDB 场景获得更稳定且可解释的结论。</p>
+	            <div class="release-groups">
+	              <section><h3>SQL 准确率内核</h3><ul>
+	                <li>单引号 Gate 只裁剪错误恢复分支，不再错误跳过数值、布尔和其他上下文；Gate 响应不复用为确认样本，所有结论均由完整原子 A-B-B-A 请求组产生。</li>
+	                <li>普通单引号破坏/恢复只先报告疑似；两条独立恢复路径、条件错误、布尔或时间 Oracle 成立后再升级，降低字符校验、统一异常页和瞬时抖动误报。</li>
+	                <li>递归识别 JSON 对象、数组中的 code/returnCode/errorCode/status/success，并要求同一 JSON 路径形成稳定业务差分；JSP 可复用持久配置的成功/失败正则。</li>
+	              </ul></section>
+	              <section><h3>上下文与数据库适配</h3><ul>
+	                <li>Query、Form、JSON、Multipart 等文本值增加数值、日期、布尔、UUID 词法分类；插入点按位置、参数语义和 SQL 上下文排序。</li>
+	                <li>未知数据库按通用 CASE、PostgreSQL/GaussDB、MySQL 有界回退；命中 JDBC/数据库特征时直接选择对应方言，不进行数据提取。</li>
+	                <li>ORDER BY 区分字段和方向，LIMIT/OFFSET 增加 PostgreSQL/GaussDB 条件错误对；MyBatis 动态片段只发送两次 canary，复用已有基线，不重复原始 POST。</li>
+	              </ul></section>
+	              <section><h3>长响应与证据质量</h3><ul>
+	                <li>响应指纹同时保留集合、多重集合、归一化长度、原始截断长度；长 JSP 使用头/中/尾有界采样，但“精确恢复”必须比较完整原始 Body。</li>
+	                <li>HTML 归一化保留内联 JavaScript 业务数据；支持 <code>application/*+json</code> 与无 Content-Type JSON 嗅探，XML 属性变异进行精确转义。</li>
+	                <li>数据库错误规则从所有匹配中选择最高价值证据；前台正则默认仅为“较确定”，管理员可单独配置可信度，且基线已有错误不会污染恢复分支。</li>
+	              </ul></section>
+	              <section><h3>调度、预算与配置</h3><ul>
+	                <li>全部 SQL 家族插件进入独占 Oracle Lane，避免并发探针、令牌轮换、缓存和限流干扰配对顺序。</li>
+	                <li>请求规划计入独立 Gate；四请求组和 MyBatis 双请求组按组预留，预算不足绝不发送半组。自适应剪枝释放的额度回到任务共享池供后续 SQL 插件使用。</li>
+	                <li>覆盖率区分已发送、自适应剪枝、变异失败和预算跳过；SQL Payload 保存时校验 kind、group、占位符、配对数量及时间参数，同组多对规则按配置顺序执行。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V2.3</h2></div><time datetime="2026-07-28">2026-07-28</time></header>
+	            <p class="release-lead">围绕复杂 Java 接口的真实参数形态补齐嵌套变异、执行上下文和 SQL 子句上下文，并将 Fastjson 检测收敛为单一 SafeMode 安全基线。</p>
+	            <div class="release-groups">
+	              <section><h3>嵌套输入与扫描排除</h3><ul>
+	                <li>Query、Form、JSON 字符串、Multipart、Cookie 和配置 Header 中的内嵌 JSON/XML 可递归发现到三层；Base64 包裹内容按原编码解码、单叶变异并回填。</li>
+	                <li>持久配置新增“不参与扫描的参数名”，按 Key 大小写不敏感匹配所有输入位置；命中的外层参数不再展开其嵌套内容。</li>
+	              </ul></section>
+	              <section><h3>Java 执行上下文</h3><ul>
+	                <li>命令探测增加 Runtime.exec/ProcessBuilder 直接可执行程序上下文，并保留 Shell 输出、时延和离线回连证据链。</li>
+	                <li>Java 表达式扩展到裸 SpEL/Groovy/ScriptEngine 算术、Thymeleaf 预处理选择器、Velocity、FreeMarker 与 OGNL；均使用两组无害随机算术结果确认。</li>
+	              </ul></section>
+	              <section><h3>SQL 与响应头精度</h3><ul>
+	                <li>核心 SQL 增加 MyBatis 常见 LIKE 包裹字符串真假差分；ORDER BY 将字段名和 ASC/DESC 方向分开选择合法 MySQL 条件错误及时间对照。</li>
+	                <li>HTML 样式响应缺失或使用歧义 Content-Type 时提示 MIME 嗅探风险；明确的 text/plain 不再仅因正文像 HTML 而报告反射型 XSS。</li>
+	              </ul></section>
+	              <section><h3>Fastjson 与管理页面</h3><ul>
+	                <li>Fastjson 插件抛弃旧 Jackson/AutoType/RCE 分级，只发送不存在的 @type：SafeMode 明确拒绝不报告；确认 Fastjson 处理但无 SafeMode 拒绝时报告高危“未开启 SafeMode”。</li>
+	                <li>页头移除 Go 标签，首页标题更新为“HTTP接口快速扫描引擎”；持久配置主要卡片调整为桌面端两列紧凑布局。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V2.2</h2></div><time datetime="2026-07-27">2026-07-27</time></header>
+	            <p class="release-lead">用请求级进度替代插件计数，并以低成本筛选、按需确认显著降低多参数接口的常规扫描请求量。</p>
+	            <div class="release-groups">
+	              <section><h3>请求级进度</h3><ul>
+	                <li>进度百分比以计划请求槽位为分母，以实际发出或因证据收敛明确跳过的请求为分子，不再把大小完全不同的插件各算一份。</li>
+	                <li>实际发包数、已解析请求数与提前收敛跳过数分别保留；逐个点亮的插件卡片直接显示请求覆盖数，灰色插件同时说明跳过原因。</li>
+	              </ul></section>
+	              <section><h3>分层探测</h3><ul>
+	                <li>核心 SQL 插件对每个参数先发送一次单引号筛选；仅当出现新数据库错误、状态变化、明显空响应或显著内容差异时，才展开恢复与 A-B-B-A 复核。</li>
+	                <li>核心输入诱导异常插件先使用单引号探针；只有出现新增 Java、Spring、ORM、SQL、路径或调试泄露特征，才追加原值对照和重复确认。</li>
+	              </ul></section>
+	              <section><h3>扫描中心重排</h3><ul>
+	                <li>52 个插件按 SQL、文件、权限、代码执行、服务端请求、框架配置及响应业务风险分组，相关能力不再分散。</li>
+	                <li>插件按漏洞族分组后采用每行两个卡片，常驻显示插件名称、小字说明和风险类型；窄屏自动切换为单列。</li>
+	              </ul></section>
+	              <section><h3>结果与覆盖合并</h3><ul>
+	                <li>删除独立的“扫描覆盖率”展示框；覆盖数与状态合并到逐个点亮的插件卡片，每个插件只出现一次。</li>
+	                <li>在线使用说明同步解释新的请求进度字段、SQL 筛选阈值和异常泄露请求序列。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V2.1</h2></div><time datetime="2026-07-26">2026-07-26</time></header>
+	            <p class="release-lead">增强 SQL 注入、危险文件上传、反射型 XSS 与安全响应头，并保留请求级客户端 TLS 证书能力。</p>
+	            <div class="release-groups">
+	              <section><h3>SQL 条件错误确认</h3><ul>
+	                <li>在稳定的单引号破坏、双单引号恢复信号后，自适应追加只改变 CASE 谓词的 A-B-B-A 条件错误对，不执行数据提取。</li>
+	                <li>正常分支必须两次回到基线，错误分支必须两次稳定偏离；允许错误分支返回 500，但排除鉴权、WAF 与限流响应。</li>
+	                <li>持久配置新增“数据库报错特征”，每行一条 Go 正则；命中未出现在基线、且只稳定出现在错误分支时提升为已确认。</li>
+	                <li>业务参数按语义优先级排序并分类上下文；MySQL/PostgreSQL/GaussDB 使用单组通用条件错误对，从全部规则中保留最高价值证据。</li>
+	              </ul></section>
+	              <section><h3>客户端 TLS / mTLS</h3><ul>
+	                <li>HTTP 报文下方可上传 PEM、PFX 或 P12，保存时保留原文件名；PFX/P12 支持可选密码。</li>
+	                <li>证书同时用于“测试原始报文”和正式扫描；Auto 仍先 HTTP 后 HTTPS，进入 HTTPS 时自动带客户端证书。</li>
+	                <li>同步总接口新增可选 <code>client_tls_file</code> 绝对路径与 <code>client_tls_password</code>，证书密码不写入配置、日志或报告。</li>
+	              </ul></section>
+	              <section><h3>SQL 上下文扩展</h3><ul>
+	                <li>Deep/Custom 新增 MySQL 双引号布尔与时间 A-B-B-A 配对，补充双引号字符串上下文。</li>
+	                <li>新增 ORDER BY 专项插件，只对可配置排序参数执行条件错误与时间配对，不把普通升降序变化当作漏洞。</li>
+	                <li>新增 LIMIT/OFFSET 专项插件，通过注释恢复与引号破坏重复确认分页拼接，Normal 模式保持不变。</li>
+	              </ul></section>
+	              <section><h3>上传、XSS 与响应头</h3><ul>
+	                <li>Multipart 请求逐一扫描所有文件 Part，报告精确文件字段和索引，保留其他文本字段及二进制内容。</li>
+	                <li>普通危险后缀探针只改文件名/MIME并保留原文件内容；兼容旧 Servlet 同时以 name/filename 判断扩展名，补强 JSPX 重命名响应识别。</li>
+	                <li>XSS 过滤注释和不可执行文本容器，区分单双引号/无引号属性以及 JavaScript 字符串上下文。</li>
+	                <li>响应头保留重复值；校验 CSP、点击劫持、nosniff、HTTPS HSTS 和会话 Cookie 安全属性。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V2.0</h2></div><time datetime="2026-07-22">2026-07-22</time></header>
+	            <p class="release-lead">以“结论可信、覆盖可解释、单报文兼容、并发可治理”为核心重构扫描内核，并针对 Spring/Spring Boot/MyBatis/CTP/JSP 场景补齐 Java 专项能力。</p>
+	            <div class="v2-architecture" role="img" aria-label="V2.0 扫描器架构图">
+	              <div class="arch-row"><span>Web UI</span><span>V1 / V2 API</span><span>同步 / 异步入口</span></div>
+	              <b>↓ 输入校验、HTTP 优先连通性预检、基线复用</b>
+	              <div class="arch-row wide"><span>Burp Raw 解析器</span><span>无损插入点与会话流水线</span><span>扫描计划 / 覆盖率 / 请求预算</span></div>
+	              <b>↓ 四阶段调度 · 插件内按证据信号短路升级</b>
+	              <div class="arch-stages"><span>① 被动分析</span><span>② 安全主动探测</span><span>③ OAST 回连确认</span><span>④ 状态变更独占</span></div>
+	              <b>↓</b>
+	              <div class="arch-row wide"><span>进程级 + 单目标并发/RPS 治理</span><span>HTTP/1.1 · HTTPS · Host 映射</span><span>HTTP 61166 / LDAP 61167 一次性回连</span></div>
+	              <b>↓</b>
+	              <div class="arch-row"><span>响应字符集/HTML 归一化</span><span>L1–L5 证据强度</span><span>去重关联 + V2 稳定报告</span></div>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>精度内核</h3><ul>
+	                <li>GBK/GB2312/GB18030 JSP 响应统一解码；长页面按头部、中部、尾部分段归一化，证据围绕真实命中点截取并标记截断状态。</li>
+	                <li>JSON 使用 Number 保留大整数，XML 同名重复节点按 occurrence 单点变异；插件异常明确标记 failed，覆盖率不再伪装完整。</li>
+	                <li>同步接口复用连通性响应作为首个基线，避免状态变更原始请求重复发送；动态 Token 在每次响应后刷新并按需串行。</li>
+	                <li>SQL 核心新增“单引号破坏、双单引号恢复、反向重复”严格差分，即使后端只返回普通业务错误也能识别疑似拼接入口，无需提取数据库数据。</li>
+	              </ul></section>
+	              <section><h3>性能与调度</h3><ul>
+	                <li>插件按被动、安全主动、OAST、状态变更四阶段执行；安全阶段保持 Go 并发，状态变更插件独占执行以减少互相污染。</li>
+	                <li>新增进程级、单目标并发和全局 RPS 治理、有限任务队列；多调用方不能再把单任务并发倍增压向同一 Java 服务。</li>
+	                <li>OAST Token 批量等待，共享 8 秒窗口；回连 Token 严格一次性、过期拒绝并在消费后删除，8888 管理端口不再暴露回连路由。</li>
+	                <li>有限队列的检查与入队原子化；任务删除会终止过期计时；单 Host 限流器和 LDAP 原始连接均有生命周期/硬上限。</li>
+	              </ul></section>
+	              <section><h3>Java 专项插件</h3><ul>
+	                <li>新增 Apache Shiro RememberMe：以随机密文对照和无 gadget 的 Java null 对象流验证历史默认密钥。</li>
+	                <li>新增 SpEL/Thymeleaf/FreeMarker/OGNL 双随机算术求值、JNDI/Log4j LDAP 安全回连、Host 转发头信任检测。</li>
+	                <li>Actuator 扩展 health、mappings、loggers、threaddump 与 management 路径，明确不下载 heapdump；保留 JSP/Servlet/CTP/MyBatis 专项异常特征。</li>
+	                <li>新增 JWT 错误签名/alg=none 成对验证、代理信任头权限绕过和 TRACE 唯一 Header 反射检测；移除依赖外部身份凭据的旧越权模块。</li>
+	              </ul></section>
+	              <section><h3>API、前端与文档</h3><ul>
+	                <li>新增 <code>/api/v2/jungle_happy_scan</code> 与 Lite 版本：输出稳定 Code/中文 Label、类别、可信分、关联 ID、L1–L5 强度和规则包摘要。</li>
+	                <li>将高成本能力拆分为 11 个显式扩展插件，总数 50 个；Normal、Deep、Custom 仅选择插件，已选插件不再受隐藏的 Standard/Deep Payload 强度影响，Custom 位于模式列表最后。</li>
+	                <li>前端英文统一使用 HTTP 报文同款等宽字体；配置页开放全局资源治理与 HTTP/LDAP 回连参数。</li>
+	                <li>API、能力、架构、部署、插件配置与测试说明同步更新，V1 接口保持兼容。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V1.41</h2></div><time datetime="2026-07-21">2026-07-21</time></header>
+            <p class="release-lead">强化单报文授权判断与内网目标连接能力，默认启用独立离线回连端口，并将插件手册直接集成到管理页面。</p>
+            <div class="release-groups">
+              <section><h3>未授权访问精度</h3><ul>
+                <li>同时移除配置 Key 和报文中自动识别的 Session、Token、Authorization、Ticket 等凭据，避免只删除 Cookie 而遗漏真实鉴权字段。</li>
+                <li>接口声明必须登录但原报文完全没有鉴权字段且直接返回业务响应时，报告未授权访问。</li>
+              </ul></section>
+              <section><h3>协议与域名连接</h3><ul>
+                <li>Auto 固定先尝试 HTTP，连接或协议失败时再尝试 HTTPS；同步接口会先验证原始报文可达，不可达时不创建扫描任务。</li>
+                <li>同步接口新增可选 <code>host</code> 域名到 IP 映射，连接固定 IP 的同时保留原 Host Header 和 TLS SNI。</li>
+              </ul></section>
+              <section><h3>短信与敏感信息</h3><ul>
+                <li>同号码轰炸和多号码喷洒均提升为同步起跑的 30 请求批次，阈值仍为一分钟内成功超过 5 次。</li>
+                <li>敏感信息检测新增微信小程序 AppSecret/AppSecret 常见字段形式。</li>
+              </ul></section>
+              <section><h3>离线回连与使用说明</h3><ul>
+                <li>主程序默认额外监听 <code>0.0.0.0:61166</code>，该端口只提供一次性回连接口，不暴露扫描管理 API。</li>
+                <li>XXE、SSRF 及 Deep OS 命令注入共享随机 Token 回连；新增“使用说明”页面，离线展示完整插件手册和目录。</li>
+              </ul></section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V1.4</h2></div><time datetime="2026-07-20">2026-07-20</time></header>
+            <p class="release-lead">面向银行 Java/Linux 测试环境新增高并发短信滥用检测，强化 GaussDB SQL 注入，拆分 OpenAPI 与 GraphQL，并消除命令 Payload 反射造成的误报。</p>
+            <div class="release-groups">
+              <section>
+                <h3>短信轰炸与短信喷洒</h3>
+                <ul>
+                  <li>新增 <code>sms_abuse</code> 插件：使用同步屏障启动高并发请求，而不是普通串行 Payload。</li>
+                  <li>短信轰炸对同一号码并发发送 6 次；一分钟内成功响应超过 5 次才报告。</li>
+                  <li>短信喷洒并发替换至少 6 个不同号码；一分钟内超过 5 个号码返回成功才报告。</li>
+                  <li>成功与否依据前台可维护的响应正则判断，报告明确说明扫描器无法证明短信真实到达。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>SQL、GaussDB 与命令注入精度</h3>
+                <ul>
+                  <li>增加 GaussDB JDBC/内核异常指纹，并加入基于官方 <code>pg_sleep</code> 能力的零延迟/两秒延迟反序确认。</li>
+                  <li>保留 PostgreSQL 与 MySQL 兼容模式差分，不将 GaussDB 简单等同于 PostgreSQL。</li>
+                  <li>命令注入改为随机算术表达式：只查找请求中不存在的计算结果，并按变异、恢复、变异重复确认；完整反射 <code>printf</code> 字符串不会报警。</li>
+                  <li>删除 Windows 文件读取 Payload 与 Windows 路径泄露规则，交付目标统一为 Linux。</li>
+                  <li>任意文件读取扩展到 <code>/etc/passwd</code>、<code>/etc/hosts</code>、<code>/proc/version</code>、<code>/etc/os-release</code>，覆盖绝对路径、穿越、编码和归一化变体，并要求双请求重复确认。</li>
+                  <li>修正 Jackson/Fastjson 分级：SafeMode/验证器拒绝为防护生效提示，ClassNotFoundException 随机类型为危险加载入口，普通不存在子类型为中危入口。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>插件边界与 Normal 模式</h3>
+                <ul>
+                  <li><strong>OpenAPI/GraphQL 暴露</strong>拆分为<strong>OpenAPI 暴露</strong>，新增 v2/v3 api-docs、Swagger、Knife4j、doc.html、OpenAPI JSON/YAML 等 Java 常见路径。</li>
+                  <li>GraphQL introspection、字段建议、JSON 批量和别名批处理全部归入<strong>GraphQL 安全配置</strong>。</li>
+                  <li>Normal 仅保留全部被动插件，以及 XSS、文件读取、文件上传、异常泄露、未授权、CORS、SQL 注入、XXE、短信漏洞。</li>
+                  <li>Normal 的 SQL 注入裁剪为一组错误恢复和一组类型适配布尔差分，异常泄露只保留单引号核心探针；Custom/Standard 与 Deep 保留完整规则。</li>
+                  <li>同步 <code>jungle_happy_scan</code> 仅接收 <code>http</code>、<code>scan_type</code>、<code>scheme</code>，支持 Passive/Normal/Deep 预设或显式插件 ID 数组。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>中文报告与前端</h3>
+                <ul>
+                  <li>严重性统一输出提示、低危、中危、高危、严重；置信度统一为待确认、较确定、已确认。</li>
+                  <li>结论类别统一为确认漏洞、疑似漏洞、配置暴露、信息提示，前端显示“可信分”。</li>
+                  <li>HTTP 报文首行背景改为与 Header 一致的浅蓝色，Request、连通性 Response 和漏洞证据保持同一配色。</li>
+                  <li>版本日期字号放大；插件配置手册、能力说明和 API 文档同步到 V1.4。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">SPRING/CTP</span><h2>V1.31</h2></div><time datetime="2026-07-17">2026-07-17</time></header>
+            <p class="release-lead">针对 Java Spring、Spring Boot、MyBatis、存储过程和工商银行 CTP 类框架强化高置信检测：减少通用低价值探测，把授权链路、参数绑定和 ORM 动态 SQL 的解析差异纳入单报文扫描。</p>
+            <div class="release-groups">
+              <section>
+                <h3>Spring/CTP 授权边界</h3>
+                <ul>
+                  <li>重构 HTTP Method Override：覆盖 Header、Spring <code>_method</code> Query/Form/Multipart；必须同时满足直接方法被拒绝、覆盖响应偏离原始基线、两次结果一致。</li>
+                  <li>新增 URL 路径归一化权限绕过，匿名比较规范路径与重复斜杠、点段、矩阵参数和尾斜杠，识别网关与 Spring Security/Servlet 解析不一致。</li>
+                  <li>新增 HTTP 参数污染与身份优先级混淆，按 A/B/B/A 反序测试同名 Query、Form、Cookie、Header，识别代理和 CTP 取首值/末值差异。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>数据绑定与 JSON 反序列化</h3>
+                <ul>
+                  <li>Mass Assignment 从顶层 JSON 扩展到 JSON 对象、根数组、Query、Form、Multipart 及 JSON+Query 混合绑定。</li>
+                  <li>默认敏感字段加入角色、管理员、机构归属、数据所有者、审批和启用状态；响应明确回显后重复验证，可定位资源时再以同源 GET 确认持久化。</li>
+                  <li>新增 Jackson/Fastjson 多态入口检测，只发送不存在的无害 <code>@class/@type</code>，要求类型名与框架错误两次同时出现，不加载 gadget、不执行命令。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>MyBatis 动态 SQL 专项</h3>
+                <ul>
+                  <li>新增排序列、方向、字段列表、表名和分组参数的语义筛选，避免对所有普通值重复执行通用 SQL Payload。</li>
+                  <li>向候选片段追加唯一不存在列，按“破坏、恢复、恢复、破坏”反序确认 MySQL/PostgreSQL/JDBC/MyBatis 错误与 canary 同时出现。</li>
+                  <li>检测目标为 MyBatis <code>${}</code>、字符串拼接和存储过程动态 SQL 入口，不读取数据库内容；修复建议明确为 <code>#{}</code> 与服务端枚举白名单。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>四档扫描模式与可配置规则</h3>
+                <ul>
+                  <li>扫描中心新增 Passive、Normal、Custom、Deep：Passive 只运行被动插件；Normal 选择常见高价值预设并允许继续增减；Custom 保留手工组合；Deep 全选并启用深度 Payload。</li>
+                  <li>模式仅保留在扫描中心，持久配置页不再重复显示；Normal/Custom 继续映射现有 Standard API 语义，因此同步接口不增加参数。</li>
+                  <li>新增插件的参数语义、Payload 与检测正则均进入持久规则中心，配置版本升级为 7，自动补齐推荐默认值并保留管理员自定义规则。</li>
+                  <li>扫描模式改为与漏洞类型同一行的四色圆形按钮：绿色 Passive、浅红 Normal、橙色 Custom、深红 Deep；移除与 Deep 重复的全选控件，仅展示当前模式说明。</li>
+                  <li>请求编辑器、原始连通性 Response 和漏洞证据 Request/Response 统一采用首行、Header Key、Header Value、Body、JSON Key/Value 分层配色。</li>
+                  <li>新增 <code>docs/plugins.md</code>，按 V1.31 实际源码记录 32 个插件的发包、判定、误报抑制和持久配置扩展方式。</li>
+                  <li>版本页字号整体增大，扫描计划、逐插件预算、覆盖率和高并发执行模型继续沿用 V1.3。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PLANNING</span><h2>V1.3</h2></div><time datetime="2026-07-17">2026-07-17</time></header>
+            <p class="release-lead">从“执行一组插件”升级为可解释、可预算、可验证的单 HTTP 报文扫描平台，重点解决覆盖盲区、结果可信度、复杂报文适配和共享服务安全边界。</p>
+            <div class="release-groups">
+              <section>
+                <h3>扫描规划与公平预算</h3>
+                <ul>
+                  <li>新增扫描前计划器，依据方法、Content-Type、参数语义和插件前置条件判断适用性，不适用插件明确跳过并说明原因。</li>
+                  <li>根据插入点数量、扫描模式与插件探测模型预估请求数；全局预算不足时先为适用插件分配确定性保底额度，再按风险优先级公平分配剩余预算。</li>
+                  <li>新增 <code>POST /api/v1/plan</code>，返回预计请求、预算、耗时、插入点和逐插件计划；扫描中心在创建任务前自动展示。</li>
+                  <li>任务结果增加完整、部分、跳过三态覆盖率，逐插件记录预计请求、分配预算、实际请求和完成插入点，避免把“未测完”误解为“无漏洞”。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>统一结论质量与二次验证</h3>
+                <ul>
+                  <li>所有发现统一计算 0–100 可信分，并归类为 confirmed、probable、exposure 或 informational；分数综合置信等级、重复证据和插件特性。</li>
+                  <li>按插件、输入点和标题去重；同一输入点出现注入、异常泄露、授权或服务端风险等多个独立信号时生成关联 ID 和聚合说明。</li>
+                  <li>SQL 注入继续使用错误破坏/恢复反序确认、布尔真假反序确认和双轮延时对照；动态基线或鉴权失败响应不会直接报警。</li>
+                  <li>文件上传在上传成功后优先读取响应给出的同源地址，以唯一 canary 确认文件落地；Mass Assignment 在可定位资源时执行二次读取确认持久化。</li>
+                  <li>GraphQL 批处理阈值提升为一次接受 20 个操作，别名阈值提升为 32 个，降低仅支持正常批量能力造成的误报。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>复杂报文与协议适配</h3>
+                <ul>
+                  <li>插入点扩展到 URL 数字/UUID 路径段、业务 Cookie、可配置 Header、XML 属性、CDATA、GraphQL variables、multipart 文件名。</li>
+                  <li>识别 Query、Form、JSON、Cookie 和 Header 中的 Base64 JSON，并对其内部对象和数组字段执行解码、嵌套变异和原编码回填。</li>
+                  <li>新增 Normalized、强制 HTTP/1.1 和 Raw HTTP/1.1 三种传输模式；Raw 模式保留 Header 顺序、大小写和重复 Header，适配对报文格式敏感的旧网关。</li>
+                  <li>新增请求动态变换和基线响应提取：支持时间戳、UUID、正则替换、SHA-256、HMAC-SHA256、Base64，以及从 Body/Header 捕获 Token 后刷新后续请求。</li>
+                  <li>保留 Burp multipart 非二进制文件内容与 CRLF 边界，文件名本身也成为可扫描输入点。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>共享服务安全与验证工程</h3>
+                <ul>
+                  <li>新增单来源每分钟任务限额、共享服务模式和配置读写 CIDR；共享模式强制要求目标白名单，防止服务被当作任意网络访问代理。</li>
+	                  <li>配置保存密码支持通过 <code>JUNGLE_CONFIG_PASSWORD</code> 环境变量覆盖；配置读取自动遮蔽 HMAC Secret，保存时安全恢复未修改的密文值。</li>
+                  <li>扫描创建写入不含报文内容的审计日志；请求限额表自动清理过期来源，避免长期共享部署产生无界内存增长。</li>
+                  <li>新增计划器、覆盖率、结论去重关联、嵌套 Base64、动态签名/响应提取、Raw HTTP/1.1 的单元和集成测试，并加入 Raw HTTP 解析与插入点发现 Fuzz 入口。</li>
+                  <li>前端新增计划摘要、覆盖率表、关联风险卡片和可信分 Badge，所有新配置均可在持久配置页管理。</li>
+                  <li>配置保存密码改为保存栏内显式密码框，移除对浏览器原生 prompt 弹窗的依赖，保存成功后立即清空。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">ACCURACY</span><h2>V1.2</h2></div><time datetime="2026-07-17">2026-07-17</time></header>
+            <p class="release-lead">V1.1.1 正式更名并合并为 V1.2，完成外部调用接口、SQL 注入精度和 HTTP 报文展示的整体升级。</p>
+            <div class="release-groups">
+              <section>
+                <h3>统一外部扫描接口</h3>
+                <ul>
+                  <li>新增 <code>POST /api/v1/jungle_happy_scan</code>，输入与异步 scan 接口一致。</li>
+                  <li>服务端内部完成任务创建、排队、执行、等待和结果聚合，调用方不再需要自行轮询多个接口。</li>
+                  <li>同步连接返回完整终态、进度、告警和漏洞数组；无漏洞时固定返回空数组。</li>
+                  <li>保留异步任务、轮询和 SSE，满足长任务实时进度与同步简化接入两种场景。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>SQL 注入与敏感信息精度升级</h3>
+                <ul>
+                  <li>覆盖 PostgreSQL 的 CAST、SQLSTATE、PSQLException、pg_sleep 特征。</li>
+                  <li>覆盖 MySQL 的 SLEEP、MySQL JDBC 异常和典型 SQL 语法错误特征。</li>
+                  <li>关联 MyBatis Mapper、Spring JDBC、CallableStatement 和存储过程异常，不读取业务数据。</li>
+                  <li>错误型采用“破坏、恢复、恢复、破坏”四请求反序确认；布尔型和时间型同样执行双轮对照。</li>
+                  <li>加入基线稳定性、时延抖动、响应相似度、状态码、鉴权失败、限流和常见 WAF 拦截排除条件。</li>
+                  <li>新增规则通过配置版本迁移自动补齐，并保留管理员已有的自定义 Payload。</li>
+                  <li>敏感信息检测新增邮箱、Kubernetes Kubeconfig/Secret/ServiceAccount 及 Docker Registry 认证、认证环境变量和 Socket 路径。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>前端报文展示</h3>
+                <ul>
+                  <li>原始连通性 Response 和漏洞证据 Response 与请求编辑器使用相同浅色背景、HTTP Header 与 JSON 高亮。</li>
+                  <li>修正证据报文顺序，统一为状态行、Header、空行、Body。</li>
+                  <li>修复浏览器粘贴 Burp multipart 报文时换行被转换的问题：保留原始文件内容，并以标准 CRLF 重建上传边界和 Part Header。</li>
+                  <li>新增完整版本时间线，集中展示 V1、V1.1 和 V1.2 的架构与能力演进。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>新增主动安全插件</h3>
+                <ul>
+                  <li>新增输入诱导异常信息泄露，通过“异常、原始对照、异常”重复确认 Java、Spring、MyBatis、SQL、路径及调试信息泄露。</li>
+                  <li>新增 NoSQL、LDAP、XPath 注入，使用专属错误特征和真假条件反序差分，避免仅凭单次 500 响应报警。</li>
+                  <li>新增 Java 不安全反序列化入口检测；Standard 不执行命令，Deep 支持管理员配置无副作用输出 canary，默认不内置危险 gadget。</li>
+                  <li>新增 HTTP Method Override、Mass Assignment 和 GraphQL 专项配置检测，均要求重复响应或明确回显证据。</li>
+                  <li>扫描中心插件列表调整为单列并默认全选，恢复“HTTP接口快速扫描”中文标题。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">RULE CENTER</span><h2>V1.1</h2></div><time datetime="2026-07-16">2026-07-16</time></header>
+            <p class="release-lead">从固定内置规则升级为可在管理页面维护、落盘并即时生效的插件规则中心。</p>
+            <div class="release-groups">
+              <section>
+                <h3>规则持久化</h3>
+                <ul>
+                  <li>SQL 注入、XXE、文件读取、文件上传、敏感信息、XSS、SSRF、CORS、命令注入等插件支持前台编辑。</li>
+                  <li>支持参数名、同源路径、Payload、类型、分组、模式、MIME、Header、预期值和响应正则。</li>
+                  <li>配置使用本地 JSON 原子写入，不引入数据库；保存后新任务立即读取最新快照。</li>
+                  <li>内置配置版本迁移机制，升级时补充推荐规则而不覆盖管理员自定义内容。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>页面与排障能力</h3>
+                <ul>
+                  <li>加入 jungle.jpg Logo、浅色 Burp Raw HTTP 编辑器和请求/响应语法高亮。</li>
+                  <li>新增“测试原始报文”能力，可先验证 Host、协议、端口、TLS 和目标响应。</li>
+                  <li>Auto 协议识别能够在明确的 HTTPS/HTTP 协议不匹配时自动回退并沿用成功协议。</li>
+                  <li>网络错误转换为可读中文诊断，解决等待响应头超时和 HTTP 服务被 HTTPS 访问等常见问题。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>交付与运行</h3>
+                <ul>
+                  <li>提供 Linux AMD64、Linux ARM64、macOS ARM64 静态程序及 SHA256 清单。</li>
+                  <li>安装、启动、停止、状态脚本统一交付，目标服务器无需 Python、Go、Docker 或联网下载依赖。</li>
+                  <li>服务默认监听 <code>0.0.0.0:8888</code>，页面与静态资源全部嵌入可执行文件。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="release-card foundation">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">FOUNDATION</span><h2>V1</h2></div><time datetime="2026-07-15">2026-07-15</time></header>
+            <p class="release-lead">完成从 Python 方案到纯 Go 离线扫描器的架构重构，建立高并发任务引擎、插件系统、Raw HTTP 传输层和内存结果模型。</p>
+            <div class="architecture-flow" aria-label="V1 高并发架构">
+              <span>HTTP API</span><b>→</b><span>任务调度器</span><b>→</b><span>插件 Goroutine</span><b>→</b><span>并发 Transport</span><b>→</b><span>目标系统</span>
+            </div>
+            <div class="release-groups">
+              <section>
+                <h3>Go 高并发任务引擎</h3>
+                <ul>
+                  <li>每个扫描请求创建独立 Task，使用随机扫描 ID、独立 context、进度、告警、结果和生命周期状态。</li>
+                  <li>全局任务槽限制同时运行的扫描数量；超出上限的任务进入 queued，槽位释放后由事件通道立即唤醒，避免忙轮询。</li>
+                  <li>同一任务中的漏洞插件使用 Goroutine 并发执行，通过 WaitGroup 汇合结果；慢插件不会阻塞其他插件推进。</li>
+                  <li>任务状态、漏洞数组、进度和订阅者使用 RWMutex 保护，读状态与写进度可安全并发，已通过 Go race detector 验证。</li>
+                  <li>取消操作通过 context 传播到排队、限速等待、HTTP 请求、回连等待和插件执行；客户端主动取消后能够快速释放连接与 Goroutine。</li>
+                  <li>任务完成后只在内存保留到配置的 TTL，定时删除，不使用数据库，也不持久保存历史漏洞。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>三层并发与流量控制</h3>
+                <ul>
+                  <li>第一层由 <code>max_active_scans</code> 控制全局活跃任务数，防止大量扫描同时占满服务器。</li>
+                  <li>第二层为插件级 Goroutine 并行，不同漏洞类型共享同一次基线和任务 Transport。</li>
+                  <li>第三层由每任务 semaphore 控制实际在途 HTTP 请求数，严格限制目标连接压力。</li>
+                  <li>令牌节奏限速器按 <code>requests_per_second</code> 控制发包速率，同时设置单任务最大请求数、最大响应体和超时硬边界。</li>
+                  <li>HTTP Transport 启用 Keep-Alive 和连接池复用，避免每个 Payload 重建 TCP/TLS 连接；任务结束统一关闭空闲连接。</li>
+                  <li>DNS 结果在任务内缓存并固定到已校验 IP，减少重复解析并降低 DNS 重绑定风险。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>Raw HTTP 与网络安全边界</h3>
+                <ul>
+                  <li>直接解析 Burp Suite 标准 Raw HTTP，保留 Method、Target、Header、Cookie、Body 与 multipart 结构。</li>
+                  <li>自动发现 Query、Form、JSON、Header 和 multipart 文件插入点，并在克隆请求上执行定点变异。</li>
+                  <li>支持 Cookie、Session、token、des_sessionid、sessionid 等可配置会话标识，适配不同 Spring Boot 接口。</li>
+                  <li>每次重定向重新校验目标 Host；空白名单自动收紧到原报文 Host，私网访问、TLS 校验和显式代理均由管理员控制。</li>
+                  <li>不读取环境中的 HTTP_PROXY/HTTPS_PROXY；只有管理员显式配置代理时才出站到该代理。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>插件化扫描与准确率设计</h3>
+                <ul>
+                  <li>每种漏洞一个独立 Go 插件文件，通过统一 Meta、Scan、Progress 和 Evidence 接口注册。</li>
+                  <li>首版覆盖未授权、SQL 注入、XXE、文件读取、危险上传、敏感信息、CORS、反射型 XSS，并扩展到 20 个插件。</li>
+                  <li>扫描前采集多份原始响应基线，对动态字段归一化，再使用状态码、结构、文本相似度和业务成功/失败语义联合判定。</li>
+                  <li>主动检测优先使用无害 canary、成对 Payload 和对照响应，不以读取真实业务数据作为成功条件。</li>
+                  <li>Evidence 保存脱敏请求、完整响应、响应片段和差分指标，便于管理人员人工复核而不是只输出漏洞名称。</li>
+                </ul>
+              </section>
+              <section>
+                <h3>API、进度与离线交付</h3>
+                <ul>
+                  <li>提供扫描创建、状态、结果、取消、删除、插件元数据、配置、解析和健康检查接口。</li>
+                  <li>进度同时支持轮询和 SSE，事件包含 snapshot、progress、finding、warning、done。</li>
+                  <li>前端页面通过 Go embed 编译进程序，不依赖 CDN、npm、遥测、许可证服务或在线更新。</li>
+                  <li>使用 <code>CGO_ENABLED=0</code> 交叉编译为静态可执行文件，部署服务器无需任何语言运行时。</li>
+                  <li>监听所有网卡，适合作为测试网络内部服务；不内置 API Key，访问控制由部署网络边界负责。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+    <section id="guide-view" class="view" aria-labelledby="guide-title">
+      <div class="page-heading guide-heading">
+        <div><p class="eyebrow">OFFLINE USER GUIDE</p><h1 id="guide-title">使用说明</h1></div>
+        <p>内容来自交付包中的 <code>docs/plugins.md</code>，完全离线加载；左侧目录可快速定位插件扫描逻辑和持久配置方式。</p>
+      </div>
+      <div class="guide-layout">
+        <aside class="panel guide-toc"><strong>目录</strong><nav id="guide-toc" aria-label="使用说明目录"><span>正在加载…</span></nav></aside>
+        <article class="panel markdown-body" id="guide-content"><p>正在加载插件手册…</p></article>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/codemirror.js?v=3.6.2" defer></script>
+  <script src="/app.js?v=3.6.2" defer></script>
+  <script src="/webscan.js?v=3.6.2" defer></script>
+</body>
+</html>
