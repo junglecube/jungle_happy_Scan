@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"html"
 	"math"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -338,12 +340,36 @@ func LikelyAuthDenied(response model.Response, cfg config.Config) bool {
 	if response.StatusCode == 401 || response.StatusCode == 403 {
 		return true
 	}
-	text := strings.ToLower(string(response.Body))
-	if len(text) > 100_000 {
-		text = text[:100_000]
-	}
 	for _, pattern := range cfg.DeniedPatterns {
-		if re, err := cachedRegexp("(?i)" + pattern); err == nil && re.MatchString(text) {
+		if responsePatternMatches(response, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// responsePatternMatches keeps configured response semantics useful for both
+// body rules and phrases copied from the raw response shown in the UI. The
+// scanner stores the status code separately from the body, so a rule such as
+// "503 Service Unavailable" must also be tested against the synthesized status
+// line. A compact candidate handles gateways that fold, wrap, or emit a
+// non-breaking space between words without changing the configured RE2 rule.
+func responsePatternMatches(response model.Response, pattern string) bool {
+	re, err := cachedRegexp("(?i)" + pattern)
+	if err != nil {
+		return false
+	}
+	statusLine := fmt.Sprintf("HTTP/1.1 %d %s", response.StatusCode, http.StatusText(response.StatusCode))
+	body := string(response.Body)
+	for _, text := range []string{statusLine, body} {
+		if len(text) > 100_000 {
+			text = text[:100_000]
+		}
+		if re.MatchString(text) {
+			return true
+		}
+		compact := strings.Join(strings.Fields(text), " ")
+		if compact != text && re.MatchString(compact) {
 			return true
 		}
 	}
@@ -354,9 +380,8 @@ func LikelySuccess(response model.Response, cfg config.Config) bool {
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return false
 	}
-	text := string(response.Body)
 	for _, pattern := range cfg.SuccessPatterns {
-		if re, err := cachedRegexp("(?i)" + pattern); err == nil && re.MatchString(text) {
+		if responsePatternMatches(response, pattern) {
 			return true
 		}
 	}

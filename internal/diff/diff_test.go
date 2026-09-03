@@ -140,3 +140,19 @@ func TestAuthDeniedBusinessResponse(t *testing.T) {
 		t.Fatal("business auth failure was not detected")
 	}
 }
+
+func TestAuthDeniedPatternMatchesStatusReasonAndFlexibleWhitespace(t *testing.T) {
+	cfg := config.Default()
+	cfg.DeniedPatterns = []string{`503 Service Unavailable`}
+
+	// The raw response view includes the HTTP status line, while Response keeps
+	// only its numeric status code. The configured phrase must still match.
+	if !LikelyAuthDenied(model.Response{StatusCode: 503, Body: []byte("upstream unavailable")}, cfg) {
+		t.Fatal("status reason was not available to configured denial patterns")
+	}
+
+	// Gateways may wrap the phrase or use a non-breaking space in HTML text.
+	if !LikelyAuthDenied(model.Response{StatusCode: 200, Body: []byte("<h1>503\nService\u00a0\u00a0Unavailable</h1>")}, cfg) {
+		t.Fatal("configured denial pattern did not tolerate response whitespace")
+	}
+}
