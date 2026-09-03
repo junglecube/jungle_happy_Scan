@@ -33,3 +33,15 @@ _Avoid_: Evidence clipping
 **Evidence clipping**:
 Deliberate selection of a bounded request or response context for finding review after capture.
 _Avoid_: Capture truncation
+
+**扫描前鉴权预检**:
+在同步扫描接口开始正式漏洞扫描前，使用仍保留原始鉴权信息的请求确认目标响应没有表现出登录或授权失败；预检判定鉴权失效时，不产生正式扫描结果。
+_Avoid_: 未授权探测、匿名扫描
+
+**鉴权拒绝响应**:
+表示原始请求的登录状态或授权状态不可用的目标响应。它由明确的拒绝状态码或已配置的登录/授权失败特征共同定义，不能仅凭 HTTP 状态码 200 判定为成功。
+_Avoid_: 网络不可达、业务失败
+
+**同步扫描接口**:
+以一个终态 JSON 响应返回扫描结果的 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 逻辑接口，包括它们的版本和兼容路径别名。
+_Avoid_: 异步扫描接口、WEB 代理扫描
