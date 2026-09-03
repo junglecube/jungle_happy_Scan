@@ -88,12 +88,23 @@ V2.4 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `clien
     "category_label": "确认漏洞",
     "score": 93,
     "correlation_id": "corr_0123456789ab",
-    "evidence": [{"strength": "L4", "response_truncated": false}]
+    "evidence": [{
+      "strength": "L4",
+      "request": "GET /api/user?id=1 HTTP/1.1\r\nHost: test.example.local\r\n\r\n",
+      "response": "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\r\n...evidence context...",
+      "response_status": 200,
+      "response_truncated": true,
+      "response_capture_truncated": false,
+      "response_context_clipped": true,
+      "response_context_strategy": "marker_lines"
+    }]
   }]
 }
 ```
 
-上述英文均为 V2 API 机器字段，不能翻译后传输：`severity` 的 `info|low|medium|high|critical` 依次展示为**提示/低危/中危/高危/严重**；`confidence` 的 `tentative|firm|certain` 依次展示为**待确认/较确定/已确认**；`category` 的 `confirmed|probable|exposure|informational|unknown` 依次展示为**确认漏洞/疑似漏洞/配置暴露/信息提示/未知**。本文其余说明统一使用中文展示值。`evidence.strength` 为 L1–L5：L1 被动指标、L2 差分启发式、L3 唯一错误/指纹、L4 成对或重复确认、L5 一次性回连或执行级证据。L5 会参与可信分计算，不会再把严格回连证据降为普通疑似。Lite 版本仍去掉完整 `request`、`response`，保留摘要、命中窗口、截断标记、指标与证据强度。原 V1 接口继续兼容中文字段。
+上述英文均为 V2 API 机器字段，不能翻译后传输：`severity` 的 `info|low|medium|high|critical` 依次展示为**提示/低危/中危/高危/严重**；`confidence` 的 `tentative|firm|certain` 依次展示为**待确认/较确定/已确认**；`category` 的 `confirmed|probable|exposure|informational|unknown` 依次展示为**确认漏洞/疑似漏洞/配置暴露/信息提示/未知**。本文其余说明统一使用中文展示值。`evidence.strength` 为 L1–L5：L1 被动指标、L2 差分启发式、L3 唯一错误/指纹、L4 成对或重复确认、L5 一次性回连或执行级证据。L5 会参与可信分计算，不会再把严格回连证据降为普通疑似。
+
+V2 Full 的 `evidence.request` 和 `evidence.response` 是漏洞证据视图，不承诺返回完整正文：响应保留状态行和全部响应头，正文通常保留 marker 前 15 行、命中行和后 14 行，最多 64 KiB；没有 marker 时保留头 15 行和尾 15 行。单行超长正文使用 UTF-8 安全的字符窗口，二进制正文返回类型、长度、SHA-256 和完整性描述。`response_context_clipped` 表示展示视图被主动裁剪，`response_capture_truncated` 表示扫描器未能完整捕获目标响应；为兼容旧调用方，`response_truncated` 在任一情况发生时均为 `true`。请求具有对应的 `request_context_*` 字段。Lite 版本仍去掉 `request`、`response`，保留摘要、命中窗口、截断标记、指标与证据强度。原 V1 接口继续兼容中文字段。
 
 ## 创建扫描
 
@@ -380,6 +391,8 @@ curl -sS http://127.0.0.1:8888/api/v1/config \
 ```
 
 `dynamic_patterns` 中每个元素是一条完整正则。它只用于响应差分前的归一化，例如将时间戳、requestId、traceId、nonce 等动态内容替换成统一占位符，避免内容每次变化导致误报；不会修改目标响应或最终证据。
+
+`verify_tls` 是持久配置中的全局 HTTPS 证书策略，默认值为 `false`，适合使用内网私有 CA 或自签证书的目标；管理员可以在配置页面或 `PUT /api/v1/config` 中改为 `true` 以启用严格证书校验。严格校验失败不会自动降级为跳过校验。
 
 ## V1.3 协议与动态请求配置
 

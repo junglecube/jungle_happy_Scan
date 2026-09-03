@@ -165,7 +165,7 @@ func Default() Config {
 		TimeoutSeconds: 10, MaxConcurrency: 8, MaxActiveScans: 4, RequestsPerSecond: 10,
 		MaxQueuedScans: 32, GlobalMaxConcurrency: 32, PerHostConcurrency: 12, GlobalRequestsPerSecond: 40,
 		MaxResponseBytes: 2_000_000, MaxRequests: 500, BaselineSamples: 2,
-		VerifyTLS: true, FollowRedirects: false, AllowPrivateTargets: true,
+		VerifyTLS: false, FollowRedirects: false, AllowPrivateTargets: true,
 		TransportMode:  "normalized",
 		TaskTTLMinutes: 30, RedactEvidence: false, AuthorizationExpected: true,
 		SessionIdentifiers: SessionKeyList{

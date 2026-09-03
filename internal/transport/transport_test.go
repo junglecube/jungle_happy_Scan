@@ -103,6 +103,63 @@ func TestTransportCompletesMutualTLSHandshake(t *testing.T) {
 	}
 }
 
+func TestDefaultTLSPolicyAllowsIntranetSelfSignedTargets(t *testing.T) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "tls-ok")
+	}))
+	defer target.Close()
+	parsedURL, err := url.Parse(target.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"normalized", "force_http1"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.TransportMode = mode
+			cfg.AllowedHosts = []string{parsedURL.Hostname()}
+			client, err := New(cfg, Hooks{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			request, err := httpraw.Parse("GET / HTTP/1.1\r\nHost: "+parsedURL.Host+"\r\n\r\n", "https")
+			if err != nil {
+				t.Fatal(err)
+			}
+			response, err := client.Send(context.Background(), request)
+			if err != nil || response.StatusCode != http.StatusOK || string(response.Body) != "tls-ok" {
+				t.Fatalf("default intranet TLS policy failed: status=%d body=%q err=%v", response.StatusCode, response.Body, err)
+			}
+		})
+	}
+}
+
+func TestStrictTLSPolicyRejectsSelfSignedTarget(t *testing.T) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "tls-ok")
+	}))
+	defer target.Close()
+	parsedURL, err := url.Parse(target.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.VerifyTLS = true
+	cfg.AllowedHosts = []string{parsedURL.Hostname()}
+	client, err := New(cfg, Hooks{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	request, err := httpraw.Parse("GET / HTTP/1.1\r\nHost: "+parsedURL.Host+"\r\n\r\n", "https")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Send(context.Background(), request); err == nil {
+		t.Fatal("strict TLS policy unexpectedly accepted a self-signed target")
+	}
+}
+
 func TestReadResponseBodyTruncatesDrainsAndReportsFullLength(t *testing.T) {
 	original := bytes.Repeat([]byte("x"), 25_000)
 	reader := bytes.NewReader(original)

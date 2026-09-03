@@ -16,6 +16,7 @@ import (
 	"jungle_happy_Scan/internal/callback"
 	"jungle_happy_Scan/internal/config"
 	"jungle_happy_Scan/internal/diff"
+	evidenceview "jungle_happy_Scan/internal/evidence"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
 )
@@ -199,21 +200,51 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 	if c.Config.RedactEvidence {
 		evidenceRequest, _ = httpraw.InvalidateSessions(request, c.Config.SessionIdentifiers, "<redacted>")
 	}
-	evidence.Request = evidenceRequest.Raw(c.Config.RedactEvidence)
+	requestMarker := requestChangeMarker(request, c.Request)
+	// Select against the actual mutated body before redaction so replacing a
+	// session value cannot hide the changed field from the context selector.
+	requestSelection := evidenceview.SelectText(string(request.Body), requestMarker)
+	evidence.Request = evidenceRequest.RawWithBody(c.Config.RedactEvidence, requestSelection.Text)
+	evidence.RequestTruncated = requestSelection.Clipped
+	evidence.RequestContextClipped = requestSelection.Clipped
+	evidence.RequestContextStrategy = requestSelection.Strategy
+	evidence.RequestContextStartLine = requestSelection.StartLine
+	evidence.RequestContextEndLine = requestSelection.EndLine
+	evidence.RequestContextTotalLines = requestSelection.TotalLines
+	evidence.RequestContextSelectedLines = requestSelection.SelectedLines
+	evidence.RequestContextAvailableBytes = int64(requestSelection.AvailableBytes)
+	evidence.RequestContextSelectedBytes = int64(requestSelection.SelectedBytes)
 	if response != nil {
 		evidence.ResponseStatus = response.StatusCode
-		evidence.ResponseTruncated = response.Truncated
-		excerpt := diff.Excerpt(response.Text(), marker, 800)
-		if c.Config.RedactEvidence {
-			excerpt = redactExcerpt(excerpt)
+		evidence.ResponseCaptureTruncated = response.Truncated
+		evidence.ResponseCapturedBytes = int64(len(response.Body))
+		evidence.ResponseRawBytes = response.RawBytes
+		responseEvidence, responseSelection, binaryBody := rawEvidenceResponse(*response, c.Config.RedactEvidence, marker)
+		evidence.Response = responseEvidence
+		if binaryBody {
+			evidence.ResponseBodySHA256 = evidenceview.SHA256Hex(response.Body)
 		}
-		evidence.ResponseExcerpt = excerpt
-		evidence.Response = rawEvidenceResponse(*response, c.Config.RedactEvidence, marker)
+		evidence.ResponseContextClipped = responseSelection.Clipped
+		evidence.ResponseContextStrategy = responseSelection.Strategy
+		evidence.ResponseContextStartLine = responseSelection.StartLine
+		evidence.ResponseContextEndLine = responseSelection.EndLine
+		evidence.ResponseContextTotalLines = responseSelection.TotalLines
+		evidence.ResponseContextSelectedLines = responseSelection.SelectedLines
+		evidence.ResponseContextAvailableBytes = int64(responseSelection.AvailableBytes)
+		evidence.ResponseContextSelectedBytes = int64(responseSelection.SelectedBytes)
+		evidence.ResponseTruncated = response.Truncated || responseSelection.Clipped
+		if !binaryBody {
+			excerpt := diff.Excerpt(response.Text(), marker, 800)
+			if c.Config.RedactEvidence {
+				excerpt = redactExcerpt(excerpt)
+			}
+			evidence.ResponseExcerpt = excerpt
+		}
 	}
 	return evidence
 }
 
-func rawEvidenceResponse(response model.Response, redact bool, marker string) string {
+func rawEvidenceResponse(response model.Response, redact bool, marker string) (string, evidenceview.Selection, bool) {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "HTTP/1.1 %d %s\r\n", response.StatusCode, http.StatusText(response.StatusCode))
 	names := make([]string, 0, len(response.Headers))
@@ -231,15 +262,56 @@ func rawEvidenceResponse(response model.Response, redact bool, marker string) st
 		}
 	}
 	builder.WriteString("\r\n")
-	body := diff.Excerpt(response.Text(), marker, 4000)
-	if len(body) < len(response.Body) || response.Truncated {
-		body += "\n...[evidence window; response truncated=" + fmt.Sprint(response.Truncated) + "]"
+	if evidenceview.IsBinary(response.Header("content-type"), response.Body) {
+		captured := int64(len(response.Body))
+		rawBytes := "unknown"
+		if response.RawBytes > 0 {
+			rawBytes = fmt.Sprintf("%d", response.RawBytes)
+		}
+		body := fmt.Sprintf("[binary body; content_type=%s captured_bytes=%d raw_bytes=%s sha256=%s capture_complete=%t]",
+			response.Header("content-type"), captured, rawBytes, evidenceview.SHA256Hex(response.Body), !response.Truncated)
+		builder.WriteString(body)
+		selection := evidenceview.Selection{Strategy: "binary", Clipped: captured > 0, AvailableBytes: len(response.Body), SelectedBytes: len(body)}
+		return builder.String(), selection, true
+	}
+	selection := evidenceview.SelectText(response.Text(), marker)
+	body := selection.Text
+	if selection.Clipped || response.Truncated {
+		body += "\n...[evidence context clipped; response_capture_truncated=" + fmt.Sprint(response.Truncated) + "]"
 	}
 	if redact {
 		body = redactExcerpt(body)
 	}
 	builder.WriteString(body)
-	return builder.String()
+	return builder.String(), selection, false
+}
+
+func requestChangeMarker(request, baseline *httpraw.Request) string {
+	if request == nil || baseline == nil {
+		return ""
+	}
+	current := string(request.Body)
+	original := string(baseline.Body)
+	prefix := 0
+	for prefix < len(current) && prefix < len(original) && current[prefix] == original[prefix] {
+		prefix++
+	}
+	if prefix == len(current) && prefix == len(original) {
+		return ""
+	}
+	suffix := 0
+	for suffix < len(current)-prefix && suffix < len(original)-prefix && current[len(current)-1-suffix] == original[len(original)-1-suffix] {
+		suffix++
+	}
+	end := len(current) - suffix
+	if end <= prefix {
+		return ""
+	}
+	changed := current[prefix:end]
+	if len(changed) > 512 {
+		changed = changed[:512]
+	}
+	return strings.ToValidUTF8(changed, "�")
 }
 
 func evidenceMarker(metrics map[string]any) string {

@@ -71,7 +71,7 @@ HTTP/HTTPS/Host 映射/Raw HTTP1 ─ HTTP 61166 + LDAP 61167 一次性回连
 
 - 同步 API 的原始连通性响应复用为首基线；剩余样本用于动态稳定性判断。
 - 请求变换在每次发送前执行；响应提取器在每次响应后更新 Session/CSRF/nonce，并可写回 Header、Query、JSON、Cookie、Form 或 Multipart。Query/JSON 使用定位替换，不重排无关字段或损坏超大整数。轮换规则默认执行原子“写入→发送→提取”串行流水线，避免一次性 Token 被并发抢用；只有所有规则显式标记 `parallel_safe` 时才采用快照并发。
-- 响应读取受 `max_response_bytes` 约束，并明确返回 `truncated`、`raw_bytes` 和 `charset` 元数据。
+- 响应读取受 `max_response_bytes` 约束，并明确返回 `truncated`、`raw_bytes` 和 `charset` 元数据。V2 Full 的 finding evidence 另外返回完整响应头和有界正文上下文（最多 30 行、64 KiB）；`response_capture_truncated` 与 `response_context_clipped` 分别表示捕获截断和证据视图裁剪，旧 `response_truncated` 对两者兼容置真。
 - `Content-Type charset` 或 HTML meta 标记为 GBK/GB2312/GB18030 时，进入插件前转 UTF-8；缺少声明、属于文本响应且不是合法 UTF-8 的旧中文页面按 GB18030 兼容解码。二进制响应不会被猜测成中文文本。
 - JSON 响应移除动态 Key；HTML/JSP 移除注释、脚本/样式噪声、标签和隐藏动态值后比较。超长响应保留头部 50%、中部 20%、尾部 30% 的有界样本。
 
@@ -112,7 +112,7 @@ HTTP/HTTPS/Host 映射/Raw HTTP1 ─ HTTP 61166 + LDAP 61167 一次性回连
 - L4：成对、反序或重复确认；
 - L5：严格一次性回连或执行级证据。
 
-V1 接口保留中文 `severity`/`confidence`。V2 使用稳定英文机器码，并额外返回中文 Label、类别、可信分、关联 ID、`api_version`、`rule_pack_version`、`rule_pack_digest`、证据强度和响应截断状态。规则摘要由当前插件规则及全局成功/拒绝/动态正则确定，便于调用方判断两次结果是否使用相同规则集。
+V1 接口保留中文 `severity`/`confidence`。V2 使用稳定英文机器码，并额外返回中文 Label、类别、可信分、关联 ID、`api_version`、`rule_pack_version`、`rule_pack_digest`、证据强度和响应完整性/上下文状态。规则摘要由当前插件规则及全局成功/拒绝/动态正则确定，便于调用方判断两次结果是否使用相同规则集。证据响应视图不是字节级网络报文，也不承诺返回完整响应正文。
 
 ## 8. 离线与依赖
 

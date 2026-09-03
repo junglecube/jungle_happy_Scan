@@ -273,6 +273,24 @@ func (r *Request) TransportHeaders() http.Header {
 }
 
 func (r *Request) Raw(redact bool) string {
+	body := string(r.Body)
+	if redact {
+		body = secretBody.ReplaceAllString(body, `$1<redacted>$2`)
+	}
+	if len(body) > 4000 {
+		body = body[:4000] + "\n...[truncated]"
+	}
+	return r.rawWithBody(redact, body, true)
+}
+
+// RawWithBody renders the request line and headers with a caller-selected
+// body. Unlike Raw, it does not impose the legacy 4,000-character body limit;
+// evidence callers use it after applying their own bounded context policy.
+func (r *Request) RawWithBody(redact bool, body string) string {
+	return r.rawWithBody(redact, body, false)
+}
+
+func (r *Request) rawWithBody(redact bool, body string, bodyAlreadyRedacted bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s %s\r\n", r.Method, r.Target, r.HTTPVersion)
 	for _, h := range r.Headers {
@@ -283,12 +301,8 @@ func (r *Request) Raw(redact bool) string {
 		fmt.Fprintf(&b, "%s: %s\r\n", h.Name, value)
 	}
 	b.WriteString("\r\n")
-	body := string(r.Body)
-	if redact {
+	if redact && !bodyAlreadyRedacted {
 		body = secretBody.ReplaceAllString(body, `$1<redacted>$2`)
-	}
-	if len(body) > 4000 {
-		body = body[:4000] + "\n...[truncated]"
 	}
 	b.WriteString(body)
 	return b.String()

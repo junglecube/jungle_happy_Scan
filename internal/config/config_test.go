@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+func TestDefaultDisablesTLSVerificationForIntranetTargets(t *testing.T) {
+	if Default().VerifyTLS {
+		t.Fatal("intranet default must not require public CA trust")
+	}
+}
+
 func TestDefaultLinuxFileReadFingerprints(t *testing.T) {
 	samples := map[string]string{
 		"passwd 绝对路径":       "root:x:0:0:root:/root:/bin/sh\n",

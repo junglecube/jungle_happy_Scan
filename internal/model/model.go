@@ -55,14 +55,35 @@ func ParseConfidence(value string, fallback Confidence) Confidence {
 }
 
 type Evidence struct {
-	Summary           string         `json:"summary"`
-	Strength          string         `json:"strength,omitempty"`
-	Request           string         `json:"request,omitempty"`
-	Response          string         `json:"response,omitempty"`
-	ResponseStatus    int            `json:"response_status,omitempty"`
-	ResponseExcerpt   string         `json:"response_excerpt,omitempty"`
-	ResponseTruncated bool           `json:"response_truncated,omitempty"`
-	Metrics           map[string]any `json:"metrics,omitempty"`
+	Summary                       string         `json:"summary"`
+	Strength                      string         `json:"strength,omitempty"`
+	Request                       string         `json:"request,omitempty"`
+	RequestTruncated              bool           `json:"request_truncated"`
+	RequestContextClipped         bool           `json:"request_context_clipped"`
+	RequestContextStrategy        string         `json:"request_context_strategy,omitempty"`
+	RequestContextStartLine       int            `json:"request_context_start_line,omitempty"`
+	RequestContextEndLine         int            `json:"request_context_end_line,omitempty"`
+	RequestContextTotalLines      int            `json:"request_context_total_lines,omitempty"`
+	RequestContextSelectedLines   int            `json:"request_context_selected_lines,omitempty"`
+	RequestContextAvailableBytes  int64          `json:"request_context_available_bytes,omitempty"`
+	RequestContextSelectedBytes   int64          `json:"request_context_selected_bytes,omitempty"`
+	Response                      string         `json:"response,omitempty"`
+	ResponseStatus                int            `json:"response_status,omitempty"`
+	ResponseExcerpt               string         `json:"response_excerpt,omitempty"`
+	ResponseTruncated             bool           `json:"response_truncated,omitempty"`
+	ResponseCaptureTruncated      bool           `json:"response_capture_truncated"`
+	ResponseContextClipped        bool           `json:"response_context_clipped"`
+	ResponseContextStrategy       string         `json:"response_context_strategy,omitempty"`
+	ResponseContextStartLine      int            `json:"response_context_start_line,omitempty"`
+	ResponseContextEndLine        int            `json:"response_context_end_line,omitempty"`
+	ResponseContextTotalLines     int            `json:"response_context_total_lines,omitempty"`
+	ResponseContextSelectedLines  int            `json:"response_context_selected_lines,omitempty"`
+	ResponseContextAvailableBytes int64          `json:"response_context_available_bytes,omitempty"`
+	ResponseContextSelectedBytes  int64          `json:"response_context_selected_bytes,omitempty"`
+	ResponseCapturedBytes         int64          `json:"response_captured_bytes,omitempty"`
+	ResponseRawBytes              int64          `json:"response_raw_bytes,omitempty"`
+	ResponseBodySHA256            string         `json:"response_body_sha256,omitempty"`
+	Metrics                       map[string]any `json:"metrics,omitempty"`
 }
 
 type Finding struct {
