@@ -1,3 +1,4 @@
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"验收时检查 API 字段、引擎结果、前端配置和未授权插件之间的合同一致性。"}
 {"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"验收共享拒绝判定，防止新增预检绕过既有 LikelyAuthDenied 语义。"}
 {"file":".trellis/spec/backend/quality-guidelines.md","reason":"验收后端测试覆盖、错误处理和变更范围。"}
+{"file":".trellis/spec/backend/synchronous-auth-preflight.md","reason":"验收同步鉴权预检的 API 字段、错误矩阵、基线复用和入口边界合同。"}

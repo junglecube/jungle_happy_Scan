@@ -183,7 +183,11 @@ V1.3 的任务对象还包含：
 
 `POST /api/v1/jungle_happy_scan`，兼容短路径 `POST /jungle_happy_scan`。
 
-同步接口会先发送一次未修改的原始报文进行连通性检测。Auto 按 HTTP→HTTPS 尝试；成功响应会直接复用为第一个扫描基线，避免状态变更接口被原样重复调用。若两个协议都失败，接口直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。
+同步接口会先发送一次未修改的原始报文进行连通性检测和鉴权预检。Auto 按 HTTP→HTTPS 尝试；成功响应会直接复用为第一个扫描基线，避免状态变更接口被原样重复调用。若两个协议都失败，或响应状态为 `401/403`、命中 `denied_patterns`，接口直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
+
+预检只属于 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 两个逻辑同步接口，覆盖 V1、V2 和根路径兼容别名；普通异步 `/api/v1/scan`、手动 `/api/v1/connectivity`、重放和 V3 WEB 扫描不增加该门禁。`200` 响应也不能绕过预检：如果 Body 命中例如“登录失败”的 `denied_patterns`，仍会被判定为鉴权失效。
+
+同步结果的 `connectivity` 会额外提供 `network_ok`、`auth_valid`、`reason` 和可定位的 `matched_rule`。通过时为 `network_ok=true`、`auth_valid=true`；鉴权拒绝时为 `network_ok=true`、`auth_valid=false`、`reason="auth_denied"`，命中规则标识为内置状态码或 `denied_pattern[index]`；网络失败不会伪造 `auth_valid=false`。同步接口不提供忽略预检继续扫描的选项。
 
 该接口使用独立、精简且严格的入参；只传 `http` 即可完成 Normal 扫描：
 
@@ -257,6 +261,9 @@ curl -sS --max-time 600 http://127.0.0.1:8888/api/v1/jungle_happy_scan \
   },
   "connectivity": {
     "ok": true,
+    "network_ok": true,
+    "auth_valid": true,
+    "reason": "",
     "scheme": "http",
     "auto_fallback": false,
     "elapsed_ms": 12,

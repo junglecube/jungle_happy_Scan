@@ -37,6 +37,10 @@ type ConnectivityResult struct {
 	AutoFallback      bool
 	ElapsedMS         int64
 	ClientCertificate *tls.Certificate
+	NetworkOK         bool
+	AuthValid         *bool
+	Reason            string
+	MatchedRule       string
 }
 
 type Task struct {
@@ -416,8 +420,15 @@ func (m *Manager) CheckConnectivity(ctx context.Context, input model.ScanInput) 
 	response, usedRequest, fellBack, err := client.SendWithSchemeFallback(ctx, request, automatic)
 	result := ConnectivityResult{Response: response, Request: usedRequest, AutoFallback: fellBack, ElapsedMS: time.Since(started).Milliseconds(), ClientCertificate: certificate}
 	if err != nil {
-		return result, fmt.Errorf("原始报文连通性检测失败: %s", transport.FriendlyError(err, cfg.TimeoutSeconds))
+		result.Reason = fmt.Sprintf("原始报文连通性检测失败: %s", transport.FriendlyError(err, cfg.TimeoutSeconds))
+		return result, errors.New(result.Reason)
 	}
+	result.NetworkOK = true
+	auth := diff.AuthDenied(response, cfg)
+	authValid := !auth.Denied
+	result.AuthValid = &authValid
+	result.Reason = auth.Reason
+	result.MatchedRule = auth.MatchedRule
 	return result, nil
 }
 

@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -399,6 +400,171 @@ func TestV2SyncReusesConnectivityResponseAsBaseline(t *testing.T) {
 	// connectivity request is the only unmodified request; V1.41 sent it twice.
 	if requests != 1 {
 		t.Fatalf("connectivity response was not reused: original request count=%d want=1", requests)
+	}
+}
+
+func TestSynchronousAuthPreflightStopsDeniedResponses(t *testing.T) {
+	var requests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"message":"登录失败"}`)
+	}))
+	defer target.Close()
+	scanner := newTestServerWithConfig(t, target, "http", func(cfg *config.Config) {
+		cfg.DeniedPatterns = []string{`登录失败`}
+	})
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	raw := fmt.Sprintf("GET /private HTTP/1.1\r\nHost: %s\r\nCookie: JSESSIONID=valid\r\n\r\n", targetURL.Host)
+	body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"sensitive_data"}, "scheme": "http"})
+
+	for _, path := range []string{
+		"/api/v1/jungle_happy_scan",
+		"/jungle_happy_scan",
+		"/api/v1/jungle_happy_scan_lite",
+		"/jungle_happy_scan_lite",
+		"/api/v2/jungle_happy_scan",
+		"/api/v2/jungle_happy_scan_lite",
+	} {
+		response, err := http.Post(scanner.URL+path, "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+			_ = response.Body.Close()
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		scan := result["scan"].(map[string]any)
+		connectivity := result["connectivity"].(map[string]any)
+		findings := result["findings"].([]any)
+		if response.StatusCode != http.StatusOK || scan["status"] != "failed" || scan["scan_id"] != "" || len(findings) != 0 {
+			t.Fatalf("denied synchronous scan was not stopped: path=%s result=%#v", path, result)
+		}
+		if connectivity["ok"] != false || connectivity["network_ok"] != true || connectivity["auth_valid"] != false ||
+			connectivity["reason"] != "auth_denied" || connectivity["matched_rule"] != "denied_pattern[0]" {
+			t.Fatalf("denied preflight diagnostics are incomplete: path=%s connectivity=%#v", path, connectivity)
+		}
+		if _, exists := result["api_version"]; strings.HasPrefix(path, "/api/v2/") != exists {
+			t.Fatalf("unexpected V2 metadata: path=%s result=%#v", path, result)
+		}
+	}
+	if got := requests.Load(); got != 6 {
+		t.Fatalf("denied synchronous requests should stop after one preflight each: got=%d want=6", got)
+	}
+}
+
+func TestManualConnectivityDoesNotApplyAuthGate(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"message":"登录失败"}`)
+	}))
+	defer target.Close()
+	scanner := newTestServerWithConfig(t, target, "http", func(cfg *config.Config) {
+		cfg.DeniedPatterns = []string{`登录失败`}
+	})
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	raw := fmt.Sprintf("GET /private HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
+	body, _ := json.Marshal(map[string]any{"http": raw, "scheme": "http"})
+	response, err := http.Post(scanner.URL+"/api/v1/connectivity", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || result["ok"] != true {
+		t.Fatalf("manual connectivity unexpectedly applied auth gate: %#v", result)
+	}
+	if _, exists := result["auth_valid"]; exists {
+		t.Fatalf("manual connectivity response should retain network-only contract: %#v", result)
+	}
+}
+
+func TestSynchronousAuthPreflightStopsStatusDeniedResponses(t *testing.T) {
+	var requests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		status := http.StatusUnauthorized
+		if r.URL.Query().Get("status") == "403" {
+			status = http.StatusForbidden
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, "denied")
+	}))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+
+	for _, test := range []struct {
+		status int
+		path   string
+	}{
+		{status: http.StatusUnauthorized, path: "/private?status=401"},
+		{status: http.StatusForbidden, path: "/private?status=403"},
+	} {
+		raw := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", test.path, targetURL.Host)
+		body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"sensitive_data"}, "scheme": "http"})
+		response, err := http.Post(scanner.URL+"/api/v1/jungle_happy_scan", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+			_ = response.Body.Close()
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		connectivity := result["connectivity"].(map[string]any)
+		if response.StatusCode != http.StatusOK || connectivity["ok"] != false || connectivity["network_ok"] != true ||
+			connectivity["auth_valid"] != false || connectivity["matched_rule"] != fmt.Sprintf("status_code[%d]", test.status) {
+			t.Fatalf("status denial was not reported: status=%d result=%#v", test.status, result)
+		}
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("status-denied synchronous scans should send only preflight requests: got=%d want=2", got)
+	}
+}
+
+func TestAsyncScanDoesNotApplySynchronousAuthGate(t *testing.T) {
+	var requests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		_, _ = io.WriteString(w, `{"message":"登录失败"}`)
+	}))
+	defer target.Close()
+	scanner := newTestServerWithConfig(t, target, "http", func(cfg *config.Config) {
+		cfg.DeniedPatterns = []string{`登录失败`}
+	})
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	raw := fmt.Sprintf("GET /private HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
+	body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"sensitive_data"}, "scheme": "http"})
+	response, err := http.Post(scanner.URL+"/api/v1/scan", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil {
+		_ = response.Body.Close()
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("async scan was incorrectly blocked by synchronous auth gate: status=%d result=%#v", response.StatusCode, created)
+	}
+	result := waitResult(t, scanner.URL, created["scan_id"].(string))
+	if result["scan"].(map[string]any)["status"] != "completed" {
+		t.Fatalf("async scan did not complete: %#v", result)
+	}
+	if requests.Load() == 0 {
+		t.Fatal("async scan did not send its baseline request")
 	}
 }
 
@@ -952,6 +1118,10 @@ func newTestServer(t *testing.T, target *httptest.Server) *httptest.Server {
 }
 
 func newTestServerScheme(t *testing.T, target *httptest.Server, defaultScheme string) *httptest.Server {
+	return newTestServerWithConfig(t, target, defaultScheme, nil)
+}
+
+func newTestServerWithConfig(t *testing.T, target *httptest.Server, defaultScheme string, configure func(*config.Config)) *httptest.Server {
 	t.Helper()
 	store, err := config.Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
@@ -965,6 +1135,9 @@ func newTestServerScheme(t *testing.T, target *httptest.Server, defaultScheme st
 	cfg.VerifyTLS = false
 	parsed, _ := url.Parse(target.URL)
 	cfg.AllowedHosts = []string{parsed.Hostname()}
+	if configure != nil {
+		configure(&cfg)
+	}
 	if err := store.Save(cfg); err != nil {
 		t.Fatal(err)
 	}

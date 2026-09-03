@@ -368,7 +368,7 @@
 
 	          <section class="panel settings-card">
 	            <div class="panel-heading"><div><span class="step">F</span><h2>响应语义</h2></div></div>
-            <p class="card-help">动态响应归一化正则仅用于扫描器内部的响应相似度比较：时间戳、requestId、traceId、nonce 等每次变化的内容会先替换为统一占位符，从而降低动态接口误报；不会修改或保存目标的真实响应。每行填写一条正则。</p>
+            <p class="card-help">登录/授权失败正则同时用于未授权插件和 jungle_happy_scan/lite 同步接口的扫描前鉴权预检；每行填写一条 RE2 正则，匹配响应状态行或 Body。401/403 无需配置。动态响应归一化正则仅用于扫描器内部的响应相似度比较：时间戳、requestId、traceId、nonce 等每次变化的内容会先替换为统一占位符，从而降低动态接口误报；不会修改或保存目标的真实响应。</p>
             <div class="form-grid">
               <label class="full">业务成功正则（每行一个）<textarea class="mini-textarea tall" id="cfg-success"></textarea></label>
               <label class="full">登录/授权失败正则（每行一个）<textarea class="mini-textarea tall" id="cfg-denied"></textarea></label>

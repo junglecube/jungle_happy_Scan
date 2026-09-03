@@ -724,6 +724,41 @@ func rawResponseForDisplay(response model.Response) string {
 	return builder.String()
 }
 
+func synchronousConnectivityView(result engine.ConnectivityResult, sendErr error) map[string]any {
+	usedScheme := ""
+	if result.Request != nil {
+		usedScheme = result.Request.Scheme
+	}
+	view := map[string]any{
+		"ok":            sendErr == nil,
+		"network_ok":    result.NetworkOK,
+		"scheme":        usedScheme,
+		"auto_fallback": result.AutoFallback,
+		"elapsed_ms":    result.ElapsedMS,
+		"reason":        "",
+	}
+	if sendErr != nil {
+		view["reason"] = "transport_error"
+		view["error"] = sendErr.Error()
+		return view
+	}
+	view["status_code"] = result.Response.StatusCode
+	if result.AuthValid != nil {
+		view["auth_valid"] = *result.AuthValid
+	}
+	if result.Reason != "" {
+		view["reason"] = result.Reason
+	}
+	if result.MatchedRule != "" {
+		view["matched_rule"] = result.MatchedRule
+	}
+	if result.AuthValid != nil && !*result.AuthValid {
+		view["ok"] = false
+		view["error"] = "原始报文鉴权预检失败：响应命中 " + result.MatchedRule
+	}
+	return view
+}
+
 func (s *Server) createScan(w http.ResponseWriter, r *http.Request) {
 	var input model.ScanInput
 	if err := decodeJSON(w, r, &input, 6_000_000); err != nil {
@@ -792,7 +827,35 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		result := map[string]any{
 			"scan": failed, "findings": []model.Finding{},
-			"connectivity": map[string]any{"ok": false, "scheme": usedScheme, "auto_fallback": preflight.AutoFallback, "elapsed_ms": preflight.ElapsedMS, "error": err.Error()},
+			"connectivity": func() map[string]any {
+				view := synchronousConnectivityView(preflight, err)
+				if usedScheme != "" {
+					view["scheme"] = usedScheme
+				}
+				return view
+			}(),
+		}
+		if apiV2 {
+			result["api_version"] = "2.0"
+			result["rule_pack_version"] = "2.4.0"
+			result["rule_pack_digest"] = s.rulePackDigest()
+			result["findings"] = []v2Finding{}
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if preflight.AuthValid != nil && !*preflight.AuthValid {
+		now := time.Now().UTC()
+		message := "原始报文鉴权预检失败：响应命中 " + preflight.MatchedRule
+		failed := model.ScanView{
+			Status: "failed", CreatedAt: now, FinishedAt: &now, ElapsedMS: preflight.ElapsedMS,
+			Error: message, Warnings: []string{},
+			Progress: model.Progress{Phase: "connectivity_auth_failed", Percent: 100, Plugins: map[string]model.PluginProgress{}},
+			Coverage: model.Coverage{Complete: false, Plugins: map[string]model.PluginCoverage{}},
+		}
+		result := map[string]any{
+			"scan": failed, "findings": []model.Finding{},
+			"connectivity": synchronousConnectivityView(preflight, nil),
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
@@ -827,10 +890,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	s.manager.Delete(task.ID())
 	result := map[string]any{
 		"scan": view, "findings": findings,
-		"connectivity": map[string]any{
-			"ok": true, "scheme": preflight.Request.Scheme, "auto_fallback": preflight.AutoFallback,
-			"elapsed_ms": preflight.Response.Elapsed.Milliseconds(), "status_code": preflight.Response.StatusCode,
-		},
+		"connectivity": synchronousConnectivityView(preflight, nil),
 	}
 	if apiV2 {
 		result["api_version"] = "2.0"

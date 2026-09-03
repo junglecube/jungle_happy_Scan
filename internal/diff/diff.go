@@ -336,16 +336,39 @@ func RepresentativeBaselineIndex(responses []model.Response, cfg config.Config) 
 	return bestIndex
 }
 
-func LikelyAuthDenied(response model.Response, cfg config.Config) bool {
+// AuthDeniedResult describes the shared authentication-denial decision used by
+// the unauthorized plugin and synchronous preflight. MatchedRule is stable
+// diagnostic metadata only; it never contains response content.
+type AuthDeniedResult struct {
+	Denied      bool
+	Reason      string
+	MatchedRule string
+}
+
+const authDeniedReason = "auth_denied"
+
+func AuthDenied(response model.Response, cfg config.Config) AuthDeniedResult {
 	if response.StatusCode == 401 || response.StatusCode == 403 {
-		return true
-	}
-	for _, pattern := range cfg.DeniedPatterns {
-		if responsePatternMatches(response, pattern) {
-			return true
+		return AuthDeniedResult{
+			Denied:      true,
+			Reason:      authDeniedReason,
+			MatchedRule: fmt.Sprintf("status_code[%d]", response.StatusCode),
 		}
 	}
-	return false
+	for index, pattern := range cfg.DeniedPatterns {
+		if responsePatternMatches(response, pattern) {
+			return AuthDeniedResult{
+				Denied:      true,
+				Reason:      authDeniedReason,
+				MatchedRule: fmt.Sprintf("denied_pattern[%d]", index),
+			}
+		}
+	}
+	return AuthDeniedResult{}
+}
+
+func LikelyAuthDenied(response model.Response, cfg config.Config) bool {
+	return AuthDenied(response, cfg).Denied
 }
 
 // responsePatternMatches keeps configured response semantics useful for both
