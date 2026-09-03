@@ -58,6 +58,7 @@ type Evidence struct {
 	Summary                       string         `json:"summary"`
 	Strength                      string         `json:"strength,omitempty"`
 	Request                       string         `json:"request,omitempty"`
+	RequestBase64                 string         `json:"request_base64,omitempty"`
 	RequestTruncated              bool           `json:"request_truncated"`
 	RequestContextClipped         bool           `json:"request_context_clipped"`
 	RequestContextStrategy        string         `json:"request_context_strategy,omitempty"`

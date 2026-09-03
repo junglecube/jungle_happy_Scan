@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"bytes"
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -36,6 +38,10 @@ func TestEvidenceKeepsHeadersAndMarkerLineContext(t *testing.T) {
 	}
 	if !evidence.RequestContextClipped || evidence.RequestContextStrategy != "marker_lines" || !strings.Contains(evidence.Request, "field-20 TARGET") {
 		t.Fatalf("request evidence did not center changed field: %#v", evidence)
+	}
+	requestBytes, err := base64.StdEncoding.DecodeString(evidence.RequestBase64)
+	if err != nil || !bytes.Equal(requestBytes, mutated.RawExact()) {
+		t.Fatalf("base64 request evidence did not preserve the complete raw request: err=%v", err)
 	}
 	if !evidence.ResponseTruncated || evidence.ResponseCaptureTruncated {
 		t.Fatalf("legacy truncation metadata is wrong: %#v", evidence)

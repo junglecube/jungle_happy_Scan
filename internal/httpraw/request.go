@@ -290,6 +290,20 @@ func (r *Request) RawWithBody(redact bool, body string) string {
 	return r.rawWithBody(redact, body, false)
 }
 
+// RawExact returns an unredacted, untruncated Raw HTTP representation while
+// preserving the request body byte-for-byte. It is intended for Base64
+// evidence and other byte-safe serialization paths, not direct JSON strings.
+func (r *Request) RawExact() []byte {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "%s %s %s\r\n", r.Method, r.Target, r.HTTPVersion)
+	for _, h := range r.Headers {
+		fmt.Fprintf(&b, "%s: %s\r\n", h.Name, h.Value)
+	}
+	b.WriteString("\r\n")
+	b.Write(r.Body)
+	return b.Bytes()
+}
+
 func (r *Request) rawWithBody(redact bool, body string, bodyAlreadyRedacted bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s %s\r\n", r.Method, r.Target, r.HTTPVersion)

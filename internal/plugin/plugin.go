@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -200,6 +201,7 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 	// changed field and its surrounding evidence exactly as observed.
 	requestSelection := evidenceview.SelectText(string(request.Body), requestMarker)
 	evidence.Request = request.RawWithBody(false, requestSelection.Text)
+	evidence.RequestBase64 = base64.StdEncoding.EncodeToString(request.RawExact())
 	evidence.RequestTruncated = requestSelection.Clipped
 	evidence.RequestContextClipped = requestSelection.Clipped
 	evidence.RequestContextStrategy = requestSelection.Strategy

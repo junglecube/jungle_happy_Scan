@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -867,6 +868,7 @@ func convertV2Findings(findings []model.Finding, lite bool) []v2Finding {
 		if lite {
 			for index := range evidence {
 				evidence[index].Request = ""
+				evidence[index].RequestBase64 = ""
 				evidence[index].Response = ""
 			}
 		}
@@ -947,6 +949,7 @@ func liteFindings(findings []model.Finding) []model.Finding {
 		result[index].Evidence = make([]model.Evidence, len(finding.Evidence))
 		for evidenceIndex, evidence := range finding.Evidence {
 			evidence.Request = ""
+			evidence.RequestBase64 = ""
 			evidence.Response = ""
 			result[index].Evidence[evidenceIndex] = evidence
 		}
@@ -956,6 +959,7 @@ func liteFindings(findings []model.Finding) []model.Finding {
 
 type jungleHappyScanInput struct {
 	HTTP              string            `json:"http"`
+	HTTPBase64        string            `json:"http_base64"`
 	ScanType          []string          `json:"scan_type"`
 	Scheme            string            `json:"scheme"`
 	Host              map[string]string `json:"host"`
@@ -968,8 +972,9 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	if len(configuredNormal) > 0 {
 		normalPlugins = configuredNormal[0]
 	}
-	if strings.TrimSpace(input.HTTP) == "" {
-		return model.ScanInput{}, errors.New("http 字段必须包含完整 HTTP 报文")
+	rawHTTP, err := input.rawHTTP()
+	if err != nil {
+		return model.ScanInput{}, err
 	}
 	if len(input.ScanType) == 0 {
 		input.ScanType = []string{"normal"}
@@ -978,7 +983,7 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	if scheme == "" {
 		scheme = "auto"
 	}
-	result := model.ScanInput{HTTP: input.HTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Mode: "standard"}
+	result := model.ScanInput{HTTP: rawHTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Mode: "standard"}
 	if len(input.ScanType) == 1 {
 		preset := strings.ToLower(strings.TrimSpace(input.ScanType[0]))
 		if preset == "passive" || preset == "normal" || preset == "deep" {
@@ -991,6 +996,30 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 		}
 	}
 	return result, nil
+}
+
+const maxRawHTTPBytes = 5_000_000
+
+func (input jungleHappyScanInput) rawHTTP() (string, error) {
+	hasHTTP := strings.TrimSpace(input.HTTP) != ""
+	hasBase64 := strings.TrimSpace(input.HTTPBase64) != ""
+	if hasHTTP == hasBase64 {
+		return "", errors.New("http 与 http_base64 必须且只能提供一个")
+	}
+	if hasHTTP {
+		return input.HTTP, nil
+	}
+	raw, err := base64.StdEncoding.Strict().DecodeString(input.HTTPBase64)
+	if err != nil {
+		return "", errors.New("http_base64 不是合法的标准 Base64")
+	}
+	if len(raw) == 0 {
+		return "", errors.New("http_base64 解码后不能为空")
+	}
+	if len(raw) > maxRawHTTPBytes {
+		return "", fmt.Errorf("http_base64 解码后的 HTTP 报文超过 %d 字节限制", maxRawHTTPBytes)
+	}
+	return string(raw), nil
 }
 
 func cloneHostOverrides(values map[string]string) map[string]string {

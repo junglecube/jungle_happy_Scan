@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -789,16 +790,82 @@ func TestJungleHappyScanPresetResolution(t *testing.T) {
 	}
 }
 
+func TestJungleHappyScanBase64InputPreservesRawBody(t *testing.T) {
+	bodyBytes := []byte{0xd6, 0xd0, 0xce, 0xc4}
+	received := make(chan []byte, 1)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		select {
+		case received <- body:
+		default:
+		}
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	raw := append([]byte(fmt.Sprintf("POST /submit HTTP/1.1\r\nHost: %s\r\nContent-Type: text/plain; charset=gbk\r\nContent-Length: %d\r\n\r\n", targetURL.Host, len(bodyBytes))), bodyBytes...)
+	payload, _ := json.Marshal(map[string]any{
+		"http_base64": base64.StdEncoding.EncodeToString(raw),
+		"scheme":      "http", "scan_type": []string{"sensitive_data"},
+	})
+	response, err := http.Post(scanner.URL+"/api/v1/jungle_happy_scan", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(response.Body)
+		t.Fatalf("base64 scan failed: status=%d body=%s", response.StatusCode, data)
+	}
+	select {
+	case actual := <-received:
+		if !bytes.Equal(actual, bodyBytes) {
+			t.Fatalf("request body bytes changed: got=%x want=%x", actual, bodyBytes)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("target did not receive request")
+	}
+}
+
+func TestJungleHappyScanBase64InputValidation(t *testing.T) {
+	raw := "GET / HTTP/1.1\r\nHost: bank.test\r\n\r\n"
+	valid := base64.StdEncoding.EncodeToString([]byte(raw))
+	tests := []struct {
+		name  string
+		input jungleHappyScanInput
+	}{
+		{name: "missing", input: jungleHappyScanInput{}},
+		{name: "conflict", input: jungleHappyScanInput{HTTP: raw, HTTPBase64: valid}},
+		{name: "invalid base64", input: jungleHappyScanInput{HTTPBase64: "%%%"}},
+		{name: "empty decoded value", input: jungleHappyScanInput{HTTPBase64: base64.StdEncoding.EncodeToString(nil)}},
+		{name: "too large", input: jungleHappyScanInput{HTTPBase64: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{'x'}, maxRawHTTPBytes+1))}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := test.input.scanInput(); err == nil {
+				t.Fatal("invalid input was accepted")
+			}
+		})
+	}
+	decoded, err := (jungleHappyScanInput{HTTPBase64: valid}).scanInput()
+	if err != nil || decoded.HTTP != raw {
+		t.Fatalf("valid base64 was not decoded: input=%#v err=%v", decoded, err)
+	}
+}
+
 func TestLiteFindingsRemoveRawMessagesWithoutChangingOriginal(t *testing.T) {
 	original := []model.Finding{{
 		ID: "finding-1",
 		Evidence: []model.Evidence{{
 			Summary: "matched", Request: "GET /secret HTTP/1.1\r\n\r\n",
-			Response: "HTTP/1.1 200 OK\r\n\r\nsecret", ResponseExcerpt: "secret",
+			RequestBase64: base64.StdEncoding.EncodeToString([]byte("GET /secret HTTP/1.1\r\n\r\n")),
+			Response:      "HTTP/1.1 200 OK\r\n\r\nsecret", ResponseExcerpt: "secret",
 		}},
 	}}
 	lite := liteFindings(original)
-	if lite[0].Evidence[0].Request != "" || lite[0].Evidence[0].Response != "" {
+	if lite[0].Evidence[0].Request != "" || lite[0].Evidence[0].RequestBase64 != "" || lite[0].Evidence[0].Response != "" {
 		t.Fatalf("lite evidence still contains raw messages: %#v", lite)
 	}
 	if lite[0].Evidence[0].Summary != "matched" || lite[0].Evidence[0].ResponseExcerpt != "secret" {
@@ -806,6 +873,9 @@ func TestLiteFindingsRemoveRawMessagesWithoutChangingOriginal(t *testing.T) {
 	}
 	if original[0].Evidence[0].Request == "" || original[0].Evidence[0].Response == "" {
 		t.Fatalf("lite conversion modified original findings: %#v", original)
+	}
+	if original[0].Evidence[0].RequestBase64 == "" {
+		t.Fatalf("lite conversion removed base64 evidence from original findings: %#v", original)
 	}
 }
 
