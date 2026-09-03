@@ -212,11 +212,12 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 	evidence.RequestContextAvailableBytes = int64(requestSelection.AvailableBytes)
 	evidence.RequestContextSelectedBytes = int64(requestSelection.SelectedBytes)
 	if response != nil {
+		responseMarker := responseEvidenceMarker(response.Text(), marker, c.Baseline.Text())
 		evidence.ResponseStatus = response.StatusCode
 		evidence.ResponseCaptureTruncated = response.Truncated
 		evidence.ResponseCapturedBytes = int64(len(response.Body))
 		evidence.ResponseRawBytes = response.RawBytes
-		responseEvidence, responseSelection, binaryBody := rawEvidenceResponse(*response, false, marker)
+		responseEvidence, responseSelection, binaryBody := rawEvidenceResponse(*response, false, responseMarker)
 		evidence.Response = responseEvidence
 		if binaryBody {
 			evidence.ResponseBodySHA256 = evidenceview.SHA256Hex(response.Body)
@@ -231,10 +232,60 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 		evidence.ResponseContextSelectedBytes = int64(responseSelection.SelectedBytes)
 		evidence.ResponseTruncated = response.Truncated || responseSelection.Clipped
 		if !binaryBody {
-			evidence.ResponseExcerpt = diff.Excerpt(response.Text(), marker, 800)
+			evidence.ResponseExcerpt = diff.Excerpt(response.Text(), responseMarker, 800)
 		}
 	}
 	return evidence
+}
+
+// responseEvidenceMarker keeps evidence centered on the actual response
+// signal. Explicit markers are preferred, but older plugins and some passive
+// findings only provide a summary/metric. For those responses, derive the
+// changed segment against the representative baseline instead of silently
+// falling back to an arbitrary head/tail window.
+func responseEvidenceMarker(response, preferred, baseline string) string {
+	preferred = strings.TrimSpace(preferred)
+	if preferred != "" && strings.Contains(strings.ToLower(response), strings.ToLower(preferred)) {
+		return preferred
+	}
+	return responseChangeMarker(response, baseline)
+}
+
+func responseChangeMarker(response, baseline string) string {
+	response = normalizeEvidenceText(response)
+	baseline = normalizeEvidenceText(baseline)
+	if response == "" || baseline == "" || response == baseline {
+		return ""
+	}
+	prefix := 0
+	for prefix < len(response) && prefix < len(baseline) && response[prefix] == baseline[prefix] {
+		prefix++
+	}
+	if prefix == len(response) && prefix == len(baseline) {
+		return ""
+	}
+	suffix := 0
+	for suffix < len(response)-prefix && suffix < len(baseline)-prefix &&
+		response[len(response)-1-suffix] == baseline[len(baseline)-1-suffix] {
+		suffix++
+	}
+	end := len(response) - suffix
+	if end <= prefix {
+		return ""
+	}
+	changed := strings.TrimSpace(response[prefix:end])
+	if changed == "" {
+		return ""
+	}
+	if len(changed) > 512 {
+		changed = changed[:512]
+	}
+	return strings.ToValidUTF8(changed, "�")
+}
+
+func normalizeEvidenceText(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	return strings.ReplaceAll(text, "\r", "\n")
 }
 
 // rawEvidenceResponse keeps the legacy redact argument for in-package callers;
@@ -304,7 +355,7 @@ func requestChangeMarker(request, baseline *httpraw.Request) string {
 }
 
 func evidenceMarker(metrics map[string]any) string {
-	for _, key := range []string{"match", "marker", "token", "expected", "canary", "output"} {
+	for _, key := range []string{"match", "marker", "token", "expected", "canary", "output", "payload"} {
 		if value, ok := metrics[key].(string); ok && strings.TrimSpace(value) != "" && len(value) <= 512 {
 			return value
 		}

@@ -57,7 +57,7 @@ func (p SensitiveData) Scan(ctx *Context) ([]model.Finding, error) {
 		findings = append(findings, Finding(meta, "响应泄露"+match.label, match.severity, match.confidence, "response body",
 			"接口响应包含"+match.label+"。证据保留原始匹配内容，便于人工核验。",
 			"根据数据类型实施访问控制、最小化返回内容，并避免在生产响应中返回敏感凭证。",
-			[]model.Evidence{ctx.Evidence("匹配到 "+match.label+": "+matched, nil, &ctx.Baseline, map[string]any{"match_type": match.label})}))
+			[]model.Evidence{ctx.Evidence("匹配到 "+match.label+": "+matched, nil, &ctx.Baseline, map[string]any{"match": matched, "match_type": match.label})}))
 	}
 	return findings, nil
 }

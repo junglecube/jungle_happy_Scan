@@ -73,8 +73,8 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 				"唯一标记确认输入被反射，随后上下文 payload 的关键字符完整进入 "+contextKind+" 上下文。V1 不虚构浏览器执行证据。",
 				"按 HTML、属性和 JavaScript 输出上下文编码；不要拼接不可信输入，并部署严格 CSP 作为纵深防御。",
 				[]model.Evidence{
-					ctx.Evidence("唯一标记被 HTML 响应反射", markerReq, &markerResponse, map[string]any{"context": contextKind}),
-					ctx.Evidence("上下文 payload 未被编码", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name}),
+					ctx.Evidence("唯一标记被 HTML 响应反射", markerReq, &markerResponse, map[string]any{"context": contextKind, "token": token}),
+					ctx.Evidence("上下文 payload 未被编码", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name, "match": payload}),
 				}, "OWASP WSTG-INPV-01"))
 		}
 	}

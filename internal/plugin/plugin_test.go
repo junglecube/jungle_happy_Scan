@@ -137,13 +137,31 @@ func TestRequestedPluginDetections(t *testing.T) {
 	})
 
 	t.Run("reflected-xss", func(t *testing.T) {
-		ctx := testContext(t, "GET /search?q=hello HTTP/1.1\r\nHost: bank.test\r\n\r\n", model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte("<html>hello</html>")})
+		render := func(value string) string {
+			lines := make([]string, 100)
+			for index := range lines {
+				lines[index] = fmt.Sprintf("<!-- layout-%d -->", index)
+			}
+			lines[0] = "<html>"
+			lines[50] = "<script>var reflected = '" + value + "';</script>"
+			lines[99] = "</html>"
+			return strings.Join(lines, "\n")
+		}
+		ctx := testContext(t, "GET /search?q=hello HTTP/1.1\r\nHost: bank.test\r\n\r\n", model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte(render("hello"))})
 		ctx.SendFunc = func(_ context.Context, request *httpraw.Request) (model.Response, error) {
 			u, _ := url.Parse(request.Target)
-			return model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte("<html><body>" + u.Query().Get("q") + "</body></html>")}, nil
+			return model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte(render(u.Query().Get("q")))}, nil
 		}
 		findings, err := (ReflectedXSS{}).Scan(ctx)
 		assertFinding(t, findings, err, "reflected_xss")
+		if len(findings[0].Evidence) != 2 {
+			t.Fatalf("reflected XSS evidence count = %d, want 2", len(findings[0].Evidence))
+		}
+		for index, evidence := range findings[0].Evidence {
+			if evidence.ResponseContextStrategy != "marker_lines" || !evidence.ResponseContextClipped || evidence.ResponseContextStartLine != 21 || evidence.ResponseContextEndLine != 81 {
+				t.Fatalf("reflected XSS evidence %d is not centered on the marker: %#v", index, evidence)
+			}
+		}
 	})
 }
 

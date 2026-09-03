@@ -7,28 +7,28 @@ import (
 )
 
 func TestSelectTextMarkerLineWindow(t *testing.T) {
-	lines := make([]string, 50)
+	lines := make([]string, 100)
 	for i := range lines {
 		lines[i] = "line-" + string(rune('a'+i%26))
 	}
-	lines[20] = "line-20 TARGET"
+	lines[50] = "line-50 TARGET"
 	selection := SelectText(strings.Join(lines, "\n"), "target")
 	got := strings.Split(selection.Text, "\n")
-	if selection.Strategy != "marker_lines" || !selection.Clipped || selection.StartLine != 6 || selection.EndLine != 35 {
+	if selection.Strategy != "marker_lines" || !selection.Clipped || selection.StartLine != 21 || selection.EndLine != 81 {
 		t.Fatalf("unexpected marker selection metadata: %#v", selection)
 	}
-	if len(got) != 30 || got[0] != "line-f" || got[15] != "line-20 TARGET" || got[29] != "line-i" {
-		t.Fatalf("unexpected marker window: first=%q marker=%q last=%q lines=%d", got[0], got[15], got[29], len(got))
+	if len(got) != 61 || got[0] != "line-u" || got[30] != "line-50 TARGET" || got[60] != "line-c" {
+		t.Fatalf("unexpected marker window: first=%q marker=%q last=%q lines=%d", got[0], got[30], got[60], len(got))
 	}
 }
 
 func TestSelectTextMarkerlessHeadTailAndCRLF(t *testing.T) {
-	lines := make([]string, 40)
+	lines := make([]string, 100)
 	for i := range lines {
 		lines[i] = "line-" + string(rune('0'+i%10))
 	}
 	selection := SelectText(strings.Join(lines, "\r\n"), "not-present")
-	if selection.Strategy != "head_tail_lines" || !selection.Clipped || selection.StartLine != 1 || selection.EndLine != 40 {
+	if selection.Strategy != "head_tail_lines" || !selection.Clipped || selection.StartLine != 1 || selection.EndLine != 100 {
 		t.Fatalf("unexpected markerless metadata: %#v", selection)
 	}
 	if !strings.Contains(selection.Text, omissionNotice) || !strings.HasPrefix(selection.Text, "line-0\n") || !strings.HasSuffix(selection.Text, "line-9") {

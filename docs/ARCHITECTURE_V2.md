@@ -71,7 +71,7 @@ HTTP/HTTPS/Host 映射/Raw HTTP1 ─ HTTP 61166 + LDAP 61167 一次性回连
 
 - 同步 API 的原始连通性响应复用为首基线；剩余样本用于动态稳定性判断。
 - 请求变换在每次发送前执行；响应提取器在每次响应后更新 Session/CSRF/nonce，并可写回 Header、Query、JSON、Cookie、Form 或 Multipart。Query/JSON 使用定位替换，不重排无关字段或损坏超大整数。轮换规则默认执行原子“写入→发送→提取”串行流水线，避免一次性 Token 被并发抢用；只有所有规则显式标记 `parallel_safe` 时才采用快照并发。
-- 响应读取受 `max_response_bytes` 约束，并明确返回 `truncated`、`raw_bytes` 和 `charset` 元数据。V2 Full 的 finding evidence 另外返回完整响应头和有界正文上下文（最多 30 行、64 KiB）；`response_capture_truncated` 与 `response_context_clipped` 分别表示捕获截断和证据视图裁剪，旧 `response_truncated` 对两者兼容置真。
+- 响应读取受 `max_response_bytes` 约束，并明确返回 `truncated`、`raw_bytes` 和 `charset` 元数据。V2 Full 的 finding evidence 另外返回完整响应头和围绕关键证据上下各 30 行（最多 61 行、64 KiB）的有界正文上下文；缺少显式 marker 时先使用响应与代表性基线的差异定位，再使用 markerless 兜底。`response_capture_truncated` 与 `response_context_clipped` 分别表示捕获截断和证据视图裁剪，旧 `response_truncated` 对两者兼容置真。
 - `Content-Type charset` 或 HTML meta 标记为 GBK/GB2312/GB18030 时，进入插件前转 UTF-8；缺少声明、属于文本响应且不是合法 UTF-8 的旧中文页面按 GB18030 兼容解码。二进制响应不会被猜测成中文文本。
 - JSON 响应移除动态 Key；HTML/JSP 移除注释、脚本/样式噪声、标签和隐藏动态值后比较。超长响应保留头部 50%、中部 20%、尾部 30% 的有界样本。
 

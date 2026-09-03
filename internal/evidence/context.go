@@ -12,9 +12,13 @@ import (
 )
 
 const (
-	// MaxBodyLines is the maximum number of source body lines retained for an
-	// evidence view. The markerless view also contains an omission indicator.
-	MaxBodyLines = 30
+	// EvidenceContextLinesBefore and EvidenceContextLinesAfter define the
+	// evidence-first line window. The matching line is included in addition to
+	// both sides, so a complete line-oriented selection contains at most 61
+	// source lines.
+	EvidenceContextLinesBefore = 30
+	EvidenceContextLinesAfter  = 30
+	MaxBodyLines               = EvidenceContextLinesBefore + EvidenceContextLinesAfter + 1
 	// MaxBodyBytes bounds the selected, display-safe body context. Headers are
 	// deliberately outside this bound.
 	MaxBodyBytes = 64 * 1024
@@ -69,11 +73,11 @@ func SelectText(text, marker string) Selection {
 	}
 
 	if markerPos >= 0 && len(lines) > 0 {
-		start := markerLine - 15
+		start := markerLine - EvidenceContextLinesBefore
 		if start < 0 {
 			start = 0
 		}
-		end := start + MaxBodyLines
+		end := markerLine + EvidenceContextLinesAfter + 1
 		if end > len(lines) {
 			end = len(lines)
 			start = end - MaxBodyLines
