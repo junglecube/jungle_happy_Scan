@@ -50,3 +50,26 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: 同步接口鉴权连通性预检
+<!-- trellis-session: v=2 fp=bcbd08e08b948257 -->
+
+**Date**: 2026-09-03
+**Task**: 同步接口鉴权连通性预检
+**Branch**: `codex/preflight-auth-connectivity`
+
+### Summary
+
+完成 jungle_happy_scan 与 lite 同步接口的扫描前鉴权预检：复用 401/403 和 denied_patterns，拦截 200 登录失败响应，返回 network_ok/auth_valid 诊断且不创建失败任务；保持异步、手动 connectivity、重放和 WEB 扫描不变。更新配置页、API/插件文档、ADR、领域术语和后端代码规范；完整测试、竞态测试、vet 与前端语法检查通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc8a2e9` | docs: plan synchronous auth preflight |
+| `bf5898c` | feat: gate synchronous scans on auth preflight |
+
+### Status
+
+[OK] **Completed**
