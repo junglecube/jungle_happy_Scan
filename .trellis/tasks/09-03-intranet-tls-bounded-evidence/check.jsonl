@@ -1,0 +1,6 @@
+{"file":"CONTEXT.md","reason":"Verify implementation uses approved evidence and completeness terminology."}
+{"file":"docs/adr/0001-default-to-insecure-tls-for-intranet-scans.md","reason":"Verify TLS behavior matches the accepted decision."}
+{"file":"docs/adr/0002-return-bounded-finding-evidence-from-the-full-api.md","reason":"Verify evidence formatting matches the accepted bounded-view decision."}
+{"file":"docs/API.md","reason":"Verify public API documentation and compatibility claims."}
+{"file":"docs/TESTING_V2.md","reason":"Verify V2 test coverage and documented validation expectations."}
+{"file":".trellis/spec/backend/index.md","reason":"Verify backend guideline compliance."}

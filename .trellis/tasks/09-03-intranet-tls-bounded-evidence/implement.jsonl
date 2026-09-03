@@ -1,0 +1,6 @@
+{"file":"CONTEXT.md","reason":"Approved domain language separating scan messages, evidence views, capture truncation, and evidence clipping."}
+{"file":"docs/adr/0001-default-to-insecure-tls-for-intranet-scans.md","reason":"Accepted TLS default and strict-mode boundary."}
+{"file":"docs/adr/0002-return-bounded-finding-evidence-from-the-full-api.md","reason":"Accepted V2 Full evidence-view contract and selection rules."}
+{"file":"docs/API.md","reason":"Current public Full/Lite API contract that implementation must update compatibly."}
+{"file":"docs/ARCHITECTURE_V2.md","reason":"Current response bounds, evidence, and truncation architecture."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend guideline index for implementation conventions."}
