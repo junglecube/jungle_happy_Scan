@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"jungle_happy_Scan/internal/config"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
 )
@@ -55,5 +56,37 @@ func TestEvidenceBinaryResponseUsesDescriptor(t *testing.T) {
 	}
 	if evidence.ResponseContextStrategy != "binary" || evidence.ResponseBodySHA256 == "" {
 		t.Fatalf("binary response metadata is incomplete: %#v", evidence)
+	}
+}
+
+func TestEvidenceNeverRedactsSelectedHeadersOrBodies(t *testing.T) {
+	ctx := testContext(t, "POST /submit HTTP/1.1\r\nHost: bank.test\r\nAuthorization: Bearer request-secret\r\nCookie: JSESSIONID=session-secret\r\nContent-Type: application/json\r\n\r\n{\"token\":\"request-secret\"}", model.Response{})
+	ctx.Config.RedactEvidence = true
+	response := model.Response{
+		StatusCode: 200,
+		Headers: map[string]string{
+			"content-type":  "application/json",
+			"set-cookie":    "JSESSIONID=response-secret; Secure",
+			"authorization": "Bearer response-secret",
+		},
+		Body: []byte(`{"token":"body-secret","phone":"13800138000"}`),
+	}
+	evidence := ctx.Evidence("sensitive match", ctx.Request, &response, map[string]any{"match": "body-secret"})
+	for name, value := range map[string]string{
+		"request":  evidence.Request,
+		"response": evidence.Response,
+		"excerpt":  evidence.ResponseExcerpt,
+	} {
+		if strings.Contains(value, "<redacted>") {
+			t.Fatalf("%s evidence was redacted despite the compatibility flag: %q", name, value)
+		}
+	}
+	for _, expected := range []string{"request-secret", "session-secret", "JSESSIONID=response-secret", "Bearer response-secret", "body-secret", "13800138000"} {
+		if !strings.Contains(evidence.Request+evidence.Response+evidence.ResponseExcerpt, expected) {
+			t.Fatalf("evidence lost original value %q: %#v", expected, evidence)
+		}
+	}
+	if ctx.Config.RedactEvidence != true || config.Default().RedactEvidence != false {
+		t.Fatalf("redaction compatibility/default contract changed unexpectedly")
 	}
 }

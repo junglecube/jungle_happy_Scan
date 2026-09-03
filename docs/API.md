@@ -336,7 +336,7 @@ curl -sS "http://127.0.0.1:8888/api/v1/replays/replay_xxx/results/result_1"
 
 - `plugin_id`、`title`、`severity`、`confidence`
 - `affected`、`description`、`remediation`
-- `evidence`：脱敏 Request、完整顺序的 Response（状态行、Header、空行、Body）、响应片段和差分指标
+- `evidence`：保留原文的 Request、完整顺序的 Response（状态行、Header、空行、Body）、响应片段和差分指标；证据上下文不执行脱敏
 - `references`、`detected_at`
 - `score`：0–100 的统一可信分。
 - `category`：`确认漏洞`、`疑似漏洞`、`配置暴露` 或 `信息提示`。

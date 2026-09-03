@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -196,15 +195,11 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 	if request == nil {
 		request = c.Request
 	}
-	evidenceRequest := request
-	if c.Config.RedactEvidence {
-		evidenceRequest, _ = httpraw.InvalidateSessions(request, c.Config.SessionIdentifiers, "<redacted>")
-	}
 	requestMarker := requestChangeMarker(request, c.Request)
-	// Select against the actual mutated body before redaction so replacing a
-	// session value cannot hide the changed field from the context selector.
+	// Select against the actual mutated body so the returned context keeps the
+	// changed field and its surrounding evidence exactly as observed.
 	requestSelection := evidenceview.SelectText(string(request.Body), requestMarker)
-	evidence.Request = evidenceRequest.RawWithBody(c.Config.RedactEvidence, requestSelection.Text)
+	evidence.Request = request.RawWithBody(false, requestSelection.Text)
 	evidence.RequestTruncated = requestSelection.Clipped
 	evidence.RequestContextClipped = requestSelection.Clipped
 	evidence.RequestContextStrategy = requestSelection.Strategy
@@ -219,7 +214,7 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 		evidence.ResponseCaptureTruncated = response.Truncated
 		evidence.ResponseCapturedBytes = int64(len(response.Body))
 		evidence.ResponseRawBytes = response.RawBytes
-		responseEvidence, responseSelection, binaryBody := rawEvidenceResponse(*response, c.Config.RedactEvidence, marker)
+		responseEvidence, responseSelection, binaryBody := rawEvidenceResponse(*response, false, marker)
 		evidence.Response = responseEvidence
 		if binaryBody {
 			evidence.ResponseBodySHA256 = evidenceview.SHA256Hex(response.Body)
@@ -234,17 +229,15 @@ func (c *Context) Evidence(summary string, request *httpraw.Request, response *m
 		evidence.ResponseContextSelectedBytes = int64(responseSelection.SelectedBytes)
 		evidence.ResponseTruncated = response.Truncated || responseSelection.Clipped
 		if !binaryBody {
-			excerpt := diff.Excerpt(response.Text(), marker, 800)
-			if c.Config.RedactEvidence {
-				excerpt = redactExcerpt(excerpt)
-			}
-			evidence.ResponseExcerpt = excerpt
+			evidence.ResponseExcerpt = diff.Excerpt(response.Text(), marker, 800)
 		}
 	}
 	return evidence
 }
 
-func rawEvidenceResponse(response model.Response, redact bool, marker string) (string, evidenceview.Selection, bool) {
+// rawEvidenceResponse keeps the legacy redact argument for in-package callers;
+// evidence serialization intentionally ignores it and always preserves values.
+func rawEvidenceResponse(response model.Response, _ bool, marker string) (string, evidenceview.Selection, bool) {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "HTTP/1.1 %d %s\r\n", response.StatusCode, http.StatusText(response.StatusCode))
 	names := make([]string, 0, len(response.Headers))
@@ -255,9 +248,6 @@ func rawEvidenceResponse(response model.Response, redact bool, marker string) (s
 	for _, name := range names {
 		values := response.HeaderAll(name)
 		for _, value := range values {
-			if redact && (strings.EqualFold(name, "set-cookie") || strings.EqualFold(name, "authorization")) {
-				value = "<redacted>"
-			}
 			fmt.Fprintf(&builder, "%s: %s\r\n", name, value)
 		}
 	}
@@ -278,9 +268,6 @@ func rawEvidenceResponse(response model.Response, redact bool, marker string) (s
 	body := selection.Text
 	if selection.Clipped || response.Truncated {
 		body += "\n...[evidence context clipped; response_capture_truncated=" + fmt.Sprint(response.Truncated) + "]"
-	}
-	if redact {
-		body = redactExcerpt(body)
 	}
 	builder.WriteString(body)
 	return builder.String(), selection, false
@@ -496,13 +483,4 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func redactExcerpt(value string) string {
-	phone := regexp.MustCompile(`(^|\D)(1[3-9]\d{3})\d{4}(\d{4})(\D|$)`)
-	value = phone.ReplaceAllString(value, `$1$2****$3$4`)
-	longNumber := regexp.MustCompile(`(^|\D)(\d{4})\d{5,11}([0-9Xx]{4})(\D|$)`)
-	value = longNumber.ReplaceAllString(value, `$1$2****$3$4`)
-	secret := regexp.MustCompile(`(?i)("(?:password|passwd|pwd|token|secret|sessionid|authorization)"\s*:\s*")[^"]*(")`)
-	return secret.ReplaceAllString(value, `$1<redacted>$2`)
 }

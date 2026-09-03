@@ -21,7 +21,7 @@
   "proxy_url": "",
   "transport_mode": "normalized",
   "task_ttl_minutes": 30,
-  "redact_evidence": true,
+  "redact_evidence": false,
   "authorization_expected": true,
   "session_identifiers": [
     "cookie",

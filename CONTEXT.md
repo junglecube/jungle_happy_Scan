@@ -15,10 +15,12 @@ _Avoid_: Byte-exact raw message, network raw message
 **Evidence excerpt**:
 A bounded fragment selected to explain why a finding was produced. It is display evidence and is never a substitute for a complete canonical scan message.
 _Avoid_: Full response, raw response
+Selected request and response values are preserved verbatim; evidence rendering does not perform redaction.
 
 **Evidence response view**:
 An application-level response view containing the response status, complete response headers, and bounded body context around the evidence. It supports finding review without claiming to contain the entire response body.
 _Avoid_: Full response, raw response
+The legacy `redact_evidence` configuration field is retained for compatibility but does not alter this view.
 
 **Message completeness**:
 The explicit state describing whether the scanner captured the underlying message completely. It is separate from deliberate evidence-context clipping.
