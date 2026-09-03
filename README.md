@@ -1,6 +1,13 @@
 # jungle_happy_Scan V3.6
 
-当前源码版本：`v3.6.2`。
+当前源码版本：`v3.6.3`。
+
+## V3.6.3 更新
+
+- 内网 HTTPS 扫描默认关闭证书校验（`verify_tls=false`），可显式开启严格校验；HTTP/1.1、代理和 mTLS 兼容模式保持不变。
+- Full 扫描 API 返回最终扫描结果，Evidence 保留完整响应头并按命中位置提供最多 30 行、64 KiB 的有界上下文，同时明确区分捕获截断与证据截取。
+- Evidence 的选中 Request、Response Header/Body 和响应片段保留原文，不执行脱敏；旧 `redact_evidence` 字段继续兼容但不再改变输出。
+- 提供 Linux AMD64 与 ARM64 的静态离线安装包，内含对应二进制、配置文件及 `install.sh`、`start.sh`、`stop.sh`、`status.sh`，两种架构使用相同启动方式。
 
 ## V3.6 更新
 
@@ -92,7 +99,7 @@ SCANNER_INSTALL_DIR=/opt/jungle_happy_Scan ./install_jungle_happy_Scan.sh
 
 安装脚本自动识别操作系统和 CPU 架构，选择包内二进制并启动服务。整个安装过程不连接互联网。
 
-从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.6，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
+从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.6.3，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
 
 页面和健康检查：
 

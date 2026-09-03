@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
-  <title>jungle_happy_Scan · V3.6.2</title>
-  <link rel="stylesheet" href="/styles.css?v=3.6.2">
-  <link rel="stylesheet" href="/v11.css?v=3.6.2">
-  <link rel="stylesheet" href="/webscan.css?v=3.6.2">
+  <title>jungle_happy_Scan · V3.6.3</title>
+  <link rel="stylesheet" href="/styles.css?v=3.6.3">
+  <link rel="stylesheet" href="/v11.css?v=3.6.3">
+  <link rel="stylesheet" href="/webscan.css?v=3.6.3">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
-      <span><strong>jungle_happy_Scan</strong><small>V3.6.2</small></span>
+      <span><strong>jungle_happy_Scan</strong><small>V3.6.3</small></span>
     </a>
     <nav aria-label="主导航">
       <button class="nav-button active" data-view="proxy">代理设置</button>
@@ -398,7 +398,7 @@
       </div>
 
       <div class="release-summary panel">
-	        <div><span>当前版本</span><strong>V3.6.2</strong></div>
+	        <div><span>当前版本</span><strong>V3.6.3</strong></div>
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
 	        <div><span>漏洞插件</span><strong>52 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
@@ -408,7 +408,35 @@
 	        <article class="release-card current">
 	          <div class="release-marker"><span></span></div>
 	          <div class="release-content panel">
-	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.2</h2></div><time datetime="2026-08-31">2026-08-31</time></header>
+	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.3</h2></div><time datetime="2026-09-03">2026-09-03</time></header>
+	            <p class="release-lead">内网 HTTPS、原始证据上下文与 Linux 多架构离线交付收口，扫描结果更适合在受控测试网络中复核和部署。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.3 内网扫描与证据流程">
+	              <span>内网目标</span><b>→</b><span>HTTPS/mTLS</span><b>→</b><span>完整捕获</span><b>→</b><span>有界证据上下文</span><b>→</b><span>原文复核</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>内网 HTTPS 兼容</h3><ul>
+	                <li>默认关闭 TLS 证书校验，内网自签名或私有 CA 服务可直接进行连通性检测。</li>
+	                <li>显式设置 <code>verify_tls=true</code> 时仍执行严格证书校验；代理、HTTP/1.1 和 mTLS 选项保持兼容。</li>
+	              </ul></section>
+	              <section><h3>原始证据上下文</h3><ul>
+	                <li>Full 扫描 API 返回最终结果；Response 保留完整 Header，Body 按命中位置最多保留 30 行并限制为 64 KiB。</li>
+	                <li>显式返回捕获截断、证据截取、选中行/字节范围和二进制 SHA-256，避免把截断误判为完整报文。</li>
+	              </ul></section>
+	              <section><h3>证据不脱敏</h3><ul>
+	                <li>选中的 Request、Response Header/Body 和响应片段保留实际扫描原文，不再替换 Cookie、Token 或命中字段。</li>
+	                <li>旧 <code>redact_evidence</code> 配置字段继续接受，但仅为兼容保留，不改变证据输出。</li>
+	              </ul></section>
+	              <section><h3>Linux 离线交付</h3><ul>
+	                <li>提供 AMD64 与 ARM64 静态安装包，包含二进制、配置、文档及 <code>install.sh</code>、<code>start.sh</code>、<code>stop.sh</code>、<code>status.sh</code>。</li>
+	                <li>两种架构使用相同安装和启动命令，默认管理端口为 8888，服务不依赖 Python、Go 或联网下载。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><h2>V3.6.2</h2></div><time datetime="2026-08-31">2026-08-31</time></header>
 	            <p class="release-lead">Normal 默认扫描收敛为九项常用高价值插件，并统一其漏洞告警等级。</p>
 	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.2 扫描配置流程">
 	              <span>浏览器信任代理 CA</span><b>→</b><span>HTTPS CONNECT</span><b>→</b><span>作用域内解密</span><b>→</b><span>mTLS 上游握手</span><b>→</b><span>捕获与扫描</span>
@@ -1053,8 +1081,8 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/codemirror.js?v=3.6.2" defer></script>
-  <script src="/app.js?v=3.6.2" defer></script>
-  <script src="/webscan.js?v=3.6.2" defer></script>
+  <script src="/codemirror.js?v=3.6.3" defer></script>
+  <script src="/app.js?v=3.6.3" defer></script>
+  <script src="/webscan.js?v=3.6.3" defer></script>
 </body>
 </html>

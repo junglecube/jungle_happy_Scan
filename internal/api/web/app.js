@@ -136,7 +136,7 @@ async function loadGuide(){
   const content=$('guide-content'),toc=$('guide-toc');
   if(!content||!toc)return;
   try{
-    const response=await fetch('/plugins.md?v=3.6.2');
+    const response=await fetch('/plugins.md?v=3.6.3');
     if(!response.ok)throw new Error(`使用说明读取失败 (${response.status})`);
     const rendered=renderMarkdown(await response.text());
     content.innerHTML=rendered.html;
