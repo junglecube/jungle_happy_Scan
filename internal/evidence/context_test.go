@@ -11,6 +11,7 @@ func TestSelectTextMarkerLineWindow(t *testing.T) {
 	for i := range lines {
 		lines[i] = "line-" + string(rune('a'+i%26))
 	}
+	lines[0] = strings.Repeat("outside-window-", MaxBodyBytes)
 	lines[50] = "line-50 TARGET"
 	selection := SelectText(strings.Join(lines, "\n"), "target")
 	got := strings.Split(selection.Text, "\n")
@@ -22,11 +23,28 @@ func TestSelectTextMarkerLineWindow(t *testing.T) {
 	}
 }
 
+func TestSelectTextRetainsAllLinesUnderByteLimit(t *testing.T) {
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = "line-" + string(rune('a'+i%26))
+	}
+	lines[99] = "line-99 TARGET"
+	selection := SelectText(strings.Join(lines, "\n"), "target")
+	got := strings.Split(selection.Text, "\n")
+	if selection.Strategy != "complete" || selection.Clipped || selection.SelectedLines != 100 {
+		t.Fatalf("unexpected complete selection under byte limit: %#v", selection)
+	}
+	if len(got) != 100 || got[0] != "line-a" || got[99] != "line-99 TARGET" {
+		t.Fatalf("body was unexpectedly line-clipped: first=%q last=%q lines=%d", got[0], got[99], len(got))
+	}
+}
+
 func TestSelectTextMarkerlessHeadTailAndCRLF(t *testing.T) {
 	lines := make([]string, 100)
 	for i := range lines {
 		lines[i] = "line-" + string(rune('0'+i%10))
 	}
+	lines[50] = strings.Repeat("middle-", MaxBodyBytes)
 	selection := SelectText(strings.Join(lines, "\r\n"), "not-present")
 	if selection.Strategy != "head_tail_lines" || !selection.Clipped || selection.StartLine != 1 || selection.EndLine != 100 {
 		t.Fatalf("unexpected markerless metadata: %#v", selection)

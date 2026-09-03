@@ -143,6 +143,7 @@ func TestRequestedPluginDetections(t *testing.T) {
 				lines[index] = fmt.Sprintf("<!-- layout-%d -->", index)
 			}
 			lines[0] = "<html>"
+			lines[1] = strings.Repeat("outside-window-", 5000)
 			lines[50] = "<script>var reflected = '" + value + "';</script>"
 			lines[99] = "</html>"
 			return strings.Join(lines, "\n")

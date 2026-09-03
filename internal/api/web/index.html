@@ -419,7 +419,7 @@
 	                <li>显式设置 <code>verify_tls=true</code> 时仍执行严格证书校验；代理、HTTP/1.1 和 mTLS 选项保持兼容。</li>
 	              </ul></section>
 	              <section><h3>原始证据上下文</h3><ul>
-	                <li>Full 扫描 API 返回最终结果；Response 保留完整 Header，Body 围绕关键证据保留上下各 30 行（最多 61 行）并限制为 64 KiB。</li>
+	                <li>Full 扫描 API 返回最终结果；Response 保留完整 Header，Body 不超过 64 KiB 时完整保留，超过后围绕关键证据保留上下各 30 行（最多 61 行）。</li>
 	                <li>显式返回捕获截断、证据截取、选中行/字节范围和二进制 SHA-256，避免把截断误判为完整报文。</li>
 	              </ul></section>
 	              <section><h3>证据不脱敏</h3><ul>

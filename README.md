@@ -5,7 +5,7 @@
 ## V3.6.3 更新
 
 - 内网 HTTPS 扫描默认关闭证书校验（`verify_tls=false`），可显式开启严格校验；HTTP/1.1、代理和 mTLS 兼容模式保持不变。
-- Full 扫描 API 返回最终扫描结果，Evidence 保留完整响应头并围绕关键证据保留上下各 30 行（最多 61 行、64 KiB）的有界上下文，同时明确区分捕获截断与证据截取。
+- Full 扫描 API 返回最终扫描结果，Evidence 保留完整响应头；响应体不超过 64 KiB 时完整保留，超过后围绕关键证据保留上下各 30 行（最多 61 行），同时明确区分捕获截断与证据截取。
 - Evidence 的选中 Request、Response Header/Body 和响应片段保留原文，不执行脱敏；旧 `redact_evidence` 字段继续兼容但不再改变输出。
 - 提供 Linux AMD64 与 ARM64 的静态离线安装包，内含对应二进制、配置文件及 `install.sh`、`start.sh`、`stop.sh`、`status.sh`，两种架构使用相同启动方式。
 

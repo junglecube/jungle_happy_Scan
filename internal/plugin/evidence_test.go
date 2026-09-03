@@ -18,6 +18,8 @@ func TestEvidenceKeepsHeadersAndMarkerLineContext(t *testing.T) {
 		originalLines[i] = "field-" + string(rune('a'+i%26))
 		mutatedLines[i] = originalLines[i]
 	}
+	originalLines[0] = strings.Repeat("outside-window-", 5000)
+	mutatedLines[0] = originalLines[0]
 	mutatedLines[50] = "field-50 TARGET"
 	ctx := testContext(t, "POST /submit HTTP/1.1\r\nHost: bank.test\r\nX-Trace: keep-me\r\n\r\n"+strings.Join(originalLines, "\n"), model.Response{})
 	mutated, err := httpraw.Parse("POST /submit HTTP/1.1\r\nHost: bank.test\r\nX-Trace: keep-me\r\n\r\n"+strings.Join(mutatedLines, "\n"), "https")
@@ -53,6 +55,7 @@ func TestEvidenceCentersOnResponseDiffWithoutExplicitMarker(t *testing.T) {
 	for i := range lines {
 		lines[i] = "line-" + string(rune('a'+i%26))
 	}
+	lines[0] = strings.Repeat("outside-window-", 5000)
 	baseline := model.Response{StatusCode: 200, Headers: map[string]string{"content-type": "text/plain"}, Body: []byte(strings.Join(lines, "\n"))}
 	lines[50] = "line-50 KEY_EVIDENCE"
 	response := baseline

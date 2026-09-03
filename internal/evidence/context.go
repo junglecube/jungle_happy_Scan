@@ -13,14 +13,15 @@ import (
 
 const (
 	// EvidenceContextLinesBefore and EvidenceContextLinesAfter define the
-	// evidence-first line window. The matching line is included in addition to
-	// both sides, so a complete line-oriented selection contains at most 61
-	// source lines.
+	// evidence-first line window used after the byte bound is exceeded. The
+	// matching line is included in addition to both sides, so a line-oriented
+	// selection contains at most 61 source lines.
 	EvidenceContextLinesBefore = 30
 	EvidenceContextLinesAfter  = 30
 	MaxBodyLines               = EvidenceContextLinesBefore + EvidenceContextLinesAfter + 1
-	// MaxBodyBytes bounds the selected, display-safe body context. Headers are
-	// deliberately outside this bound.
+	// MaxBodyBytes is the primary bound for a complete, display-safe body
+	// context. When it is exceeded, the selector falls back to the bounded
+	// evidence line window. Headers are deliberately outside this bound.
 	MaxBodyBytes = 64 * 1024
 )
 
@@ -61,7 +62,7 @@ func SelectText(text, marker string) Selection {
 		result.MarkerLine = markerLine + 1
 	}
 
-	if len(lines) <= MaxBodyLines && len(text) <= MaxBodyBytes {
+	if len(text) <= MaxBodyBytes {
 		result.Text = text
 		result.Strategy = "complete"
 		result.SelectedLines = len(lines)

@@ -104,7 +104,7 @@ V2.4 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `clien
 
 上述英文均为 V2 API 机器字段，不能翻译后传输：`severity` 的 `info|low|medium|high|critical` 依次展示为**提示/低危/中危/高危/严重**；`confidence` 的 `tentative|firm|certain` 依次展示为**待确认/较确定/已确认**；`category` 的 `confirmed|probable|exposure|informational|unknown` 依次展示为**确认漏洞/疑似漏洞/配置暴露/信息提示/未知**。本文其余说明统一使用中文展示值。`evidence.strength` 为 L1–L5：L1 被动指标、L2 差分启发式、L3 唯一错误/指纹、L4 成对或重复确认、L5 一次性回连或执行级证据。L5 会参与可信分计算，不会再把严格回连证据降为普通疑似。
 
-V2 Full 的 `evidence.request` 和 `evidence.response` 是漏洞证据视图，不承诺返回完整正文：响应保留状态行和全部响应头，正文优先保留关键 marker 上下各 30 行（含命中行最多 61 行），最多 64 KiB；没有显式 marker 时先根据当前响应与代表性基线的实际差异定位，再使用头 15 行和尾 15 行的 markerless 兜底。单行超长正文使用围绕 marker 的 UTF-8 安全字符窗口，二进制正文返回类型、长度、SHA-256 和完整性描述。`response_context_clipped` 表示展示视图被主动裁剪，`response_capture_truncated` 表示扫描器未能完整捕获目标响应；为兼容旧调用方，`response_truncated` 在任一情况发生时均为 `true`。请求具有对应的 `request_context_*` 字段。Lite 版本仍去掉 `request`、`response`，保留摘要、命中窗口、截断标记、指标与证据强度。原 V1 接口继续兼容中文字段。
+V2 Full 的 `evidence.request` 和 `evidence.response` 是漏洞证据视图：响应保留状态行和全部响应头；正文不超过 64 KiB 时完整保留，超过后优先围绕关键 marker 上下各 30 行（含命中行最多 61 行）。没有显式 marker 时先根据当前响应与代表性基线的实际差异定位，再使用头 15 行和尾 15 行的 markerless 兜底。单行超长正文使用围绕 marker 的 UTF-8 安全字符窗口，二进制正文返回类型、长度、SHA-256 和完整性描述。`response_context_clipped` 表示展示视图被主动裁剪，`response_capture_truncated` 表示扫描器未能完整捕获目标响应；为兼容旧调用方，`response_truncated` 在任一情况发生时均为 `true`。请求具有对应的 `request_context_*` 字段。Lite 版本仍去掉 `request`、`response`，保留摘要、命中窗口、截断标记、指标与证据强度。原 V1 接口继续兼容中文字段。
 
 ## 创建扫描
 

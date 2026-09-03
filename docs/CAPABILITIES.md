@@ -167,7 +167,7 @@ V2.3 对 Query、Form、JSON 字符串、Multipart、Cookie 和配置 Header 中
 - Raw HTTP/1.1 仍会重算 Content-Length、移除 Transfer-Encoding/Connection/Accept-Encoding，并继续执行目标白名单、DNS 固定、超时、RPS、并发和最大响应限制。
 - 动态请求变换可生成时间戳/UUID、执行正则替换、SHA-256/HMAC-SHA256/Base64；V2 在每次响应后提取 CSRF、Token 或 nonce，并在下一请求前写回。响应提取规则默认按原子会话流水线串行；只有全部规则显式 `parallel_safe=true` 时才以快照并发。
 - JSON 普通变异按原字节偏移只替换目标值，不重排 Key、不改变空白、不把 64 位以上整数转成浮点；XML 同名节点按 occurrence 单点修改。
-- GBK/GB2312/GB18030 的 JSP/Servlet 响应在插件匹配前转 UTF-8；长 HTML 响应使用头部/中部/尾部分段归一化，V2 Full 证据保留完整响应头和关键证据上下各 30 行（最多 61 行、64 KiB）的上下文，并分别标明捕获截断与证据视图裁剪。
+- GBK/GB2312/GB18030 的 JSP/Servlet 响应在插件匹配前转 UTF-8；长 HTML 响应使用头部/中部/尾部分段归一化，V2 Full 证据保留完整响应头；响应体不超过 64 KiB 时完整保留，超过后保留关键证据上下各 30 行（最多 61 行），并分别标明捕获截断与证据视图裁剪。
 
 ## V2.0 证据等级与 API
 
