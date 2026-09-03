@@ -28,3 +28,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 2: 保留扫描证据原文
+<!-- trellis-session: v=2 fp=1c2d995ba15d981d -->
+
+**Date**: 2026-09-03
+**Task**: 保留扫描证据原文
+**Branch**: `main`
+
+### Summary
+
+取消 finding evidence 的 Header、Body 和响应片段脱敏；保留有界上下文与旧配置字段兼容，补充回归测试、文档和 ADR。全量 go test、go vet、git diff --check 通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b8cfb9` | fix: preserve raw finding evidence |
+
+### Status
+
+[OK] **Completed**
