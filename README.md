@@ -1,6 +1,12 @@
 # jungle_happy_Scan V3.6
 
-当前源码版本：`v3.6.3`。
+当前源码版本：`v3.6.4`。
+
+## V3.6.4 更新
+
+- 同步 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 在正式扫描前使用原始报文执行鉴权预检；`401/403`、命中 `denied_patterns` 或实时响应与传入 `response` 相似度低于 `0.90` 时直接失败，不创建任务也不发送插件探测请求。
+- 预检通过的实时响应直接复用为首个扫描基线，避免对状态变更接口重复发送原始请求；预检继续保留原始鉴权信息、代理、mTLS 和 TLS 配置。
+- 同步接口补充 `network_ok`、`auth_valid`、失败原因、命中规则及原始响应相似度诊断字段；V1/V2、Full/Lite 和根路径兼容别名保持一致，普通异步扫描与手动连通性接口不增加该门禁。
 
 ## V3.6.3 更新
 
@@ -99,7 +105,7 @@ SCANNER_INSTALL_DIR=/opt/jungle_happy_Scan ./install_jungle_happy_Scan.sh
 
 安装脚本自动识别操作系统和 CPU 架构，选择包内二进制并启动服务。整个安装过程不连接互联网。
 
-从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.6.3，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
+从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.6.4，并验证 `-version` 与 `/api/health`；`config/`、客户端证书和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
 
 页面和健康检查：
 

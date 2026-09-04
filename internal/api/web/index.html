@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
-  <title>jungle_happy_Scan · V3.6.3</title>
-  <link rel="stylesheet" href="/styles.css?v=3.6.3">
-  <link rel="stylesheet" href="/v11.css?v=3.6.3">
-  <link rel="stylesheet" href="/webscan.css?v=3.6.3">
+  <title>jungle_happy_Scan · V3.6.4</title>
+  <link rel="stylesheet" href="/styles.css?v=3.6.4">
+  <link rel="stylesheet" href="/v11.css?v=3.6.4">
+  <link rel="stylesheet" href="/webscan.css?v=3.6.4">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
-      <span><strong>jungle_happy_Scan</strong><small>V3.6.3</small></span>
+      <span><strong>jungle_happy_Scan</strong><small>V3.6.4</small></span>
     </a>
     <nav aria-label="主导航">
       <button class="nav-button active" data-view="proxy">代理设置</button>
@@ -398,7 +398,7 @@
       </div>
 
       <div class="release-summary panel">
-	        <div><span>当前版本</span><strong>V3.6.3</strong></div>
+	        <div><span>当前版本</span><strong>V3.6.4</strong></div>
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
 	        <div><span>漏洞插件</span><strong>52 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
@@ -408,7 +408,31 @@
 	        <article class="release-card current">
 	          <div class="release-marker"><span></span></div>
 	          <div class="release-content panel">
-	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.3</h2></div><time datetime="2026-09-03">2026-09-03</time></header>
+	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.4</h2></div><time datetime="2026-09-04">2026-09-04</time></header>
+	            <p class="release-lead">为同步扫描增加原始请求鉴权预检与响应一致性校验，避免失效会话被误当成有效基线，并保留完整的失败诊断。</p>
+	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.4 同步扫描鉴权预检流程">
+	              <span>原始报文</span><b>→</b><span>鉴权预检</span><b>→</b><span>响应相似度</span><b>→</b><span>首个扫描基线</span><b>→</b><span>正式扫描</span>
+	            </div>
+	            <div class="release-groups">
+	              <section><h3>同步鉴权预检</h3><ul>
+	                <li><code>jungle_happy_scan</code> 与 Lite 接口现在先发送未修改的原始报文；响应为 <code>401/403</code> 或命中 <code>denied_patterns</code> 时直接返回失败。</li>
+	                <li>预检失败不会创建扫描任务，也不会继续发送插件探测请求；V1、V2、Full、Lite 和根路径兼容别名共用同一门禁。</li>
+	              </ul></section>
+	              <section><h3>捕获响应一致性</h3><ul>
+	                <li>同步接口可接收调用方捕获的原始 <code>response</code>，实时预检响应与其相似度低于 <code>0.90</code> 时停止扫描。</li>
+	                <li>成功预检的实时响应直接作为首个扫描基线，避免状态变更接口重复发送原始请求。</li>
+	              </ul></section>
+	              <section><h3>机器可读诊断</h3><ul>
+	                <li><code>connectivity</code> 增加网络状态、鉴权状态、失败原因、命中规则和响应相似度字段，不返回完整响应正文。</li>
+	                <li>相似度指标同步写入 Finding evidence；普通异步扫描、手动连通性和 WEB 代理扫描保持原有入口行为。</li>
+	              </ul></section>
+	            </div>
+	          </div>
+	        </article>
+	        <article class="release-card">
+	          <div class="release-marker"><span></span></div>
+	          <div class="release-content panel">
+	            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.6.3</h2></div><time datetime="2026-09-03">2026-09-03</time></header>
 	            <p class="release-lead">内网 HTTPS、原始证据上下文与 Linux 多架构离线交付收口，扫描结果更适合在受控测试网络中复核和部署。</p>
 	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.3 内网扫描与证据流程">
 	              <span>内网目标</span><b>→</b><span>HTTPS/mTLS</span><b>→</b><span>完整捕获</span><b>→</b><span>有界证据上下文</span><b>→</b><span>原文复核</span>
@@ -1081,8 +1105,8 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/codemirror.js?v=3.6.3" defer></script>
-  <script src="/app.js?v=3.6.3" defer></script>
-  <script src="/webscan.js?v=3.6.3" defer></script>
+  <script src="/codemirror.js?v=3.6.4" defer></script>
+  <script src="/app.js?v=3.6.4" defer></script>
+  <script src="/webscan.js?v=3.6.4" defer></script>
 </body>
 </html>
