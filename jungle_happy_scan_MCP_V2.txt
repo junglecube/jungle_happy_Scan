@@ -12,7 +12,7 @@ Lite HTTP：POST http://<scanner-host>:8888/api/v2/jungle_happy_scan_lite
 {
   "name": "jungle_happy_scan",
   "title": "jungle_happy_Scan V2 同步漏洞扫描",
-  "description": "对一条 Burp Suite Raw HTTP 报文执行扫描，在一次调用中完成 HTTP→HTTPS 连通性预检、扫描和最终结果返回。只传 http 时默认 normal 和 auto。",
+  "description": "对一条 Burp Suite Raw HTTP 报文执行扫描，在一次调用中完成连通性预检（或复用调用方提供的原始 response）、扫描和最终结果返回。只传 http 时默认 normal 和 auto。",
   "inputSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -23,6 +23,11 @@ Lite HTTP：POST http://<scanner-host>:8888/api/v2/jungle_happy_scan_lite
         "minLength": 10,
         "maxLength": 5000000,
         "description": "完整 Burp Suite Raw HTTP 报文。"
+      },
+      "response": {
+        "type": "string",
+        "maxLength": 5000000,
+        "description": "可选的完整原始 HTTP 响应报文；传入后作为首个 baseline，不重复发送原始请求预检。"
       },
       "scan_type": {
         "type": "array",

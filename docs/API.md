@@ -183,7 +183,7 @@ V1.3 的任务对象还包含：
 
 `POST /api/v1/jungle_happy_scan`，兼容短路径 `POST /jungle_happy_scan`。
 
-同步接口会先发送一次未修改的原始报文进行连通性检测和鉴权预检。Auto 按 HTTP→HTTPS 尝试；成功响应会直接复用为第一个扫描基线，避免状态变更接口被原样重复调用。若两个协议都失败，或响应状态为 `401/403`、命中 `denied_patterns`，接口直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
+同步接口默认会先发送一次未修改的原始报文进行连通性检测和鉴权预检。调用方如果已经采集到原始响应，可额外传入 `response`；接口会解析并复用它作为第一个扫描基线，不再发送原始请求预检。未提供 `response` 时 Auto 按 HTTP→HTTPS 尝试；成功响应会直接复用为第一个扫描基线，避免状态变更接口被原样重复调用。若实际预检或传入响应状态为 `401/403`、命中 `denied_patterns`，接口直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
 
 预检只属于 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 两个逻辑同步接口，覆盖 V1、V2 和根路径兼容别名；普通异步 `/api/v1/scan`、手动 `/api/v1/connectivity`、重放和 V3 WEB 扫描不增加该门禁。`200` 响应也不能绕过预检：如果 Body 命中例如“登录失败”的 `denied_patterns`，仍会被判定为鉴权失效。
 
@@ -192,6 +192,7 @@ V1.3 的任务对象还包含：
 该接口使用独立、精简且严格的入参；只传 `http` 即可完成 Normal 扫描：
 
 - `http`：必填，完整 Burp Raw HTTP 报文；不再接受 `http_request` 别名。
+- `response`：可选，完整 `HTTP/1.1` 原始响应报文，包含状态行、Header、空行和 Body。传入后作为已采集的原始响应 baseline；响应报文必须是合法 HTTP 响应且总大小不超过 5 MB。
 - `scan_type`：可选数组，省略或传空数组时默认 `normal`。仅传 `["passive"]`、`["normal"]` 或 `["deep"]` 时使用对应预设；否则数组中的每一项都按插件 ID 处理，只运行明确传入的插件。
 - `scheme`：可选，`auto`、`http`、`https`，默认 `auto`。
 - `host`：可选的域名到 IP 映射对象，例如 `{"test.icbc.com":"122.223.22.22"}`。连接使用指定 IP，但原始 Host Header 和 HTTPS TLS SNI 仍保留域名；不修改系统 hosts，也不执行外部 DNS。该参数不能与显式 HTTP 代理同时使用。
@@ -281,7 +282,7 @@ HTTP 请求正常等待到任务终态时返回 `200`；即使任务状态为 `f
 
 `POST /api/v1/jungle_happy_scan_lite`，兼容短路径 `POST /jungle_happy_scan_lite`。
 
-入参与 `jungle_happy_scan` 完全一致，包括只传 `http` 时默认使用 Normal 和 `scheme=auto`。扫描流程、漏洞判定、状态及 Finding 字段也完全一致，唯一差异是返回的每条 `evidence` 不包含 `request` 和 `response`；`summary`、`response_status`、`response_excerpt` 和 `metrics` 仍保留。该精简仅作用于本次接口响应，不修改扫描任务内部保存的完整证据。
+入参与 `jungle_happy_scan` 完全一致，包括只传 `http` 时默认使用 Normal 和 `scheme=auto`，也包括可选的上游原始 `response`。扫描流程、漏洞判定、状态及 Finding 字段也完全一致，唯一差异是返回的每条 `evidence` 不包含 `request` 和 `response`；`summary`、`response_status`、`response_excerpt` 和 `metrics` 仍保留。该精简仅作用于本次接口响应，不修改扫描任务内部保存的完整证据。
 
 ```bash
 curl -sS --max-time 600 http://127.0.0.1:8888/api/v1/jungle_happy_scan_lite \

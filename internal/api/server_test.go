@@ -885,6 +885,43 @@ func TestJungleHappyScanReturnsTerminalResultWithoutPolling(t *testing.T) {
 	}
 }
 
+func TestJungleHappyScanUsesProvidedOriginalResponseAsBaseline(t *testing.T) {
+	var requests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, "network response")
+	}))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	rawRequest := fmt.Sprintf("POST /api/user HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
+	rawResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nX-Upstream: captured\r\n\r\n<html>原始响应</html>"
+	payload, _ := json.Marshal(map[string]any{
+		"http": rawRequest, "response": rawResponse, "scheme": "http",
+		"scan_type": []string{"security_headers"},
+	})
+	response, err := http.Post(scanner.URL+"/api/v1/jungle_happy_scan", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	scan, _ := result["scan"].(map[string]any)
+	findings, _ := result["findings"].([]any)
+	connectivity, _ := result["connectivity"].(map[string]any)
+	if response.StatusCode != http.StatusOK || scan["status"] != "completed" || connectivity["status_code"] != float64(200) {
+		t.Fatalf("provided original response did not complete scan: status=%d payload=%#v", response.StatusCode, result)
+	}
+	if len(findings) == 0 || requests.Load() != 0 {
+		t.Fatalf("scanner did not use the provided response baseline: findings=%d target_requests=%d", len(findings), requests.Load())
+	}
+}
+
 func TestJungleHappyScanStopsWhenOriginalRequestIsUnreachable(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	unreachableURL, _ := url.Parse(target.URL)
@@ -1018,6 +1055,24 @@ func TestJungleHappyScanBase64InputValidation(t *testing.T) {
 	decoded, err := (jungleHappyScanInput{HTTPBase64: valid}).scanInput()
 	if err != nil || decoded.HTTP != raw {
 		t.Fatalf("valid base64 was not decoded: input=%#v err=%v", decoded, err)
+	}
+}
+
+func TestJungleHappyScanOriginalResponseValidation(t *testing.T) {
+	valid := "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\n\r\n{\"ok\":true}"
+	parsed, present, err := (jungleHappyScanInput{Response: valid}).originalResponse()
+	if err != nil || !present || parsed.StatusCode != 201 || parsed.Body == nil ||
+		parsed.Header("Content-Type") != "application/json" || len(parsed.HeaderAll("Set-Cookie")) != 2 {
+		t.Fatalf("valid original response was not parsed: response=%#v present=%v err=%v", parsed, present, err)
+	}
+	for _, input := range []jungleHappyScanInput{
+		{Response: "not an HTTP response"},
+		{Response: "HTTP/1.1 200 OK\r\nX-Test: bad\nvalue\r\n\r\n"},
+		{Response: strings.Repeat("x", maxRawHTTPBytes+1)},
+	} {
+		if _, _, err := input.originalResponse(); err == nil {
+			t.Fatalf("invalid original response was accepted: %#v", input)
+		}
 	}
 }
 

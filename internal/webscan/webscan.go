@@ -1976,6 +1976,12 @@ func parseEditedResponse(raw string) (int, http.Header, []byte, error) {
 	return status, header, body, nil
 }
 
+// ParseRawResponse parses a captured HTTP response for callers that already
+// have the upstream response and want to reuse it as scan baseline evidence.
+func ParseRawResponse(raw string) (int, http.Header, []byte, error) {
+	return parseEditedResponse(raw)
+}
+
 type limitedBuffer struct {
 	bytes.Buffer
 	limit     int

@@ -46,7 +46,7 @@ SQL 注入核心插件增加严格的单引号破坏/双单引号恢复差分：
 
 V1.1 增加插件规则中心：SQL 注入、XXE、文件读取、文件上传、敏感信息、XSS、SSRF、CORS、命令注入等 payload、参数名、路径和响应正则均可在 Web 端编辑并持久保存。扫描结果证据统一按 Request、Response 展示，Response 内严格采用状态行、Header、空行、Body 顺序。
 
-V1.2 将原 V1.1.1 的功能正式合并升级：管理页面默认显示“扫描中心”、“持久配置”和“版本更新”，也可以使用 `/?config=true` 或 `/?version=true` 直接进入对应页面。外部 API 可只调用 `POST /api/v1/jungle_happy_scan`，连接返回时直接得到最终扫描状态和漏洞数组；V1.4 已将该同步接口收敛为独立的三字段契约，详见下文和 API 文档。
+V1.2 将原 V1.1.1 的功能正式合并升级：管理页面默认显示“扫描中心”、“持久配置”和“版本更新”，也可以使用 `/?config=true` 或 `/?version=true` 直接进入对应页面。外部 API 可只调用 `POST /api/v1/jungle_happy_scan`，连接返回时直接得到最终扫描状态和漏洞数组；同步接口支持 `http` 和可选的上游原始 `response`，详见下文和 API 文档。
 
 V1.2 当时共 28 个插件，新增输入诱导异常信息泄露、NoSQL/LDAP/XPath 注入、Java 不安全反序列化入口、HTTP Method Override、Mass Assignment 和 GraphQL 专项检测。所有新增 Payload 与检测正则均可在持久配置中维护。
 

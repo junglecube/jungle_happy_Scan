@@ -24,6 +24,7 @@ import (
 
 	"jungle_happy_Scan/internal/callback"
 	"jungle_happy_Scan/internal/config"
+	"jungle_happy_Scan/internal/diff"
 	"jungle_happy_Scan/internal/engine"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
@@ -812,7 +813,17 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	preflight, err := s.manager.CheckConnectivity(r.Context(), input)
+	originalResponse, hasOriginalResponse, err := external.originalResponse()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var preflight engine.ConnectivityResult
+	if hasOriginalResponse {
+		preflight, err = s.preflightFromOriginalResponse(input, originalResponse)
+	} else {
+		preflight, err = s.manager.CheckConnectivity(r.Context(), input)
+	}
 	if err != nil {
 		now := time.Now().UTC()
 		usedScheme := input.Scheme
@@ -899,6 +910,31 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		result["findings"] = convertV2Findings(findings, lite)
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) preflightFromOriginalResponse(input model.ScanInput, response model.Response) (engine.ConnectivityResult, error) {
+	cfg := s.store.Get()
+	scheme, automatic, err := input.ResolveScheme(cfg.DefaultScheme)
+	if err != nil {
+		return engine.ConnectivityResult{}, err
+	}
+	request, err := httpraw.Parse(input.RawHTTP(), scheme)
+	if err != nil {
+		return engine.ConnectivityResult{}, err
+	}
+	if !automatic {
+		request = request.WithScheme(scheme)
+	}
+	if requestURL, urlErr := request.URL(); urlErr == nil {
+		response.URL = requestURL
+	}
+	response.RawBytes = int64(len(response.Body))
+	auth := diff.AuthDenied(response, cfg)
+	authValid := !auth.Denied
+	return engine.ConnectivityResult{
+		Response: response, Request: request, NetworkOK: true,
+		AuthValid: &authValid, Reason: auth.Reason, MatchedRule: auth.MatchedRule,
+	}, nil
 }
 
 type v2Finding struct {
@@ -1020,11 +1056,30 @@ func liteFindings(findings []model.Finding) []model.Finding {
 type jungleHappyScanInput struct {
 	HTTP              string            `json:"http"`
 	HTTPBase64        string            `json:"http_base64"`
+	Response          string            `json:"response"`
 	ScanType          []string          `json:"scan_type"`
 	Scheme            string            `json:"scheme"`
 	Host              map[string]string `json:"host"`
 	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
+}
+
+func (input jungleHappyScanInput) originalResponse() (model.Response, bool, error) {
+	if strings.TrimSpace(input.Response) == "" {
+		return model.Response{}, false, nil
+	}
+	if len([]byte(input.Response)) > maxRawHTTPBytes {
+		return model.Response{}, false, fmt.Errorf("response 解码后的 HTTP 报文超过 %d 字节限制", maxRawHTTPBytes)
+	}
+	status, header, body, err := webscan.ParseRawResponse(input.Response)
+	if err != nil {
+		return model.Response{}, false, fmt.Errorf("response 不是合法的 HTTP 响应: %w", err)
+	}
+	headers, headerValues := responseHeaderMaps(header)
+	return model.Response{
+		StatusCode: status, Headers: headers, HeaderValues: headerValues,
+		Body: body, RawBytes: int64(len(body)),
+	}, true, nil
 }
 
 func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model.ScanInput, error) {
@@ -1091,6 +1146,17 @@ func cloneHostOverrides(values map[string]string) map[string]string {
 		result[name] = address
 	}
 	return result
+}
+
+func responseHeaderMaps(source http.Header) (map[string]string, map[string][]string) {
+	headers := make(map[string]string, len(source))
+	values := make(map[string][]string, len(source))
+	for name, items := range source {
+		key := strings.ToLower(name)
+		values[key] = append([]string(nil), items...)
+		headers[key] = strings.Join(items, ", ")
+	}
+	return headers, values
 }
 
 func (s *Server) scanRoute(w http.ResponseWriter, r *http.Request) {
