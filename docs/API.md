@@ -183,7 +183,7 @@ V1.3 的任务对象还包含：
 
 `POST /api/v1/jungle_happy_scan`，兼容短路径 `POST /jungle_happy_scan`。
 
-同步接口默认会先发送一次未修改的原始报文进行连通性检测和鉴权预检。调用方如果已经采集到原始响应，可额外传入 `response`；接口仍会发送该原始报文，然后将实时响应与传入响应按状态码和归一化正文计算相似度，要求至少达到 `0.80`。这一步用于识别“认证已失效但仍返回 200”的空正文或空参数列表；不相似时直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。未提供 `response` 时保持原有预检行为；通过预检的实时响应会复用为第一个扫描基线，避免状态变更接口被原样重复调用。若实际预检响应为 `401/403`、命中 `denied_patterns`，也会直接停止。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
+同步接口默认会先发送一次未修改的原始报文进行连通性检测和鉴权预检。调用方如果已经采集到原始响应，可额外传入 `response`；接口仍会发送该原始报文，然后将实时响应与传入响应按状态码族和归一化正文计算相似度，要求至少达到 `0.80`。这一步用于识别“认证已失效但仍返回 200”的空正文或空参数列表；不相似时直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。未提供 `response` 时保持原有预检行为；通过预检的实时响应会复用为第一个扫描基线，避免状态变更接口被原样重复调用。若实际预检响应为 `401/403`、命中 `denied_patterns`，也会直接停止。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
 
 预检只属于 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 两个逻辑同步接口，覆盖 V1、V2 和根路径兼容别名；普通异步 `/api/v1/scan`、手动 `/api/v1/connectivity`、重放和 V3 WEB 扫描不增加该门禁。`200` 响应也不能绕过预检：如果 Body 命中例如“登录失败”的 `denied_patterns`，仍会被判定为鉴权失效。
 
