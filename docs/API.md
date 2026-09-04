@@ -183,16 +183,16 @@ V1.3 的任务对象还包含：
 
 `POST /api/v1/jungle_happy_scan`，兼容短路径 `POST /jungle_happy_scan`。
 
-同步接口默认会先发送一次未修改的原始报文进行连通性检测和鉴权预检。调用方如果已经采集到原始响应，可额外传入 `response`；接口会解析并复用它作为第一个扫描基线，不再发送原始请求预检。未提供 `response` 时 Auto 按 HTTP→HTTPS 尝试；成功响应会直接复用为第一个扫描基线，避免状态变更接口被原样重复调用。若实际预检或传入响应状态为 `401/403`、命中 `denied_patterns`，接口直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
+同步接口默认会先发送一次未修改的原始报文进行连通性检测和鉴权预检。调用方如果已经采集到原始响应，可额外传入 `response`；接口仍会发送该原始报文，然后将实时响应与传入响应按状态码和归一化正文计算相似度，要求至少达到 `0.80`。这一步用于识别“认证已失效但仍返回 200”的空正文或空参数列表；不相似时直接返回 `scan.status="failed"`、中文 `scan.error`、空 `findings` 和 `connectivity.ok=false`，不会创建或执行扫描任务。未提供 `response` 时保持原有预检行为；通过预检的实时响应会复用为第一个扫描基线，避免状态变更接口被原样重复调用。若实际预检响应为 `401/403`、命中 `denied_patterns`，也会直接停止。预检保留原始 Header、Cookie、Query、Form、JSON、Multipart 鉴权信息；正式未授权插件仍在后续阶段单独移除或替换这些信息。
 
 预检只属于 `jungle_happy_scan` 与 `jungle_happy_scan_lite` 两个逻辑同步接口，覆盖 V1、V2 和根路径兼容别名；普通异步 `/api/v1/scan`、手动 `/api/v1/connectivity`、重放和 V3 WEB 扫描不增加该门禁。`200` 响应也不能绕过预检：如果 Body 命中例如“登录失败”的 `denied_patterns`，仍会被判定为鉴权失效。
 
-同步结果的 `connectivity` 会额外提供 `network_ok`、`auth_valid`、`reason` 和可定位的 `matched_rule`。通过时为 `network_ok=true`、`auth_valid=true`；鉴权拒绝时为 `network_ok=true`、`auth_valid=false`、`reason="auth_denied"`，命中规则标识为内置状态码或 `denied_pattern[index]`；网络失败不会伪造 `auth_valid=false`。同步接口不提供忽略预检继续扫描的选项。
+同步结果的 `connectivity` 会额外提供 `network_ok`、`auth_valid`、`reason` 和可定位的 `matched_rule`。传入 `response` 时还会提供 `original_response_provided=true`、`response_similarity` 和 `response_similarity_threshold`。通过时为 `network_ok=true`、`auth_valid=true`；鉴权拒绝或响应相似度不足时为 `network_ok=true`、`auth_valid=false`、`reason="auth_denied"`；网络失败不会伪造 `auth_valid=false`。同步接口不提供忽略预检继续扫描的选项。
 
 该接口使用独立、精简且严格的入参；只传 `http` 即可完成 Normal 扫描：
 
 - `http`：必填，完整 Burp Raw HTTP 报文；不再接受 `http_request` 别名。
-- `response`：可选，完整 `HTTP/1.1` 原始响应报文，包含状态行、Header、空行和 Body。传入后作为已采集的原始响应 baseline；响应报文必须是合法 HTTP 响应且总大小不超过 5 MB。
+- `response`：可选，完整 `HTTP/1.1` 原始响应报文，包含状态行、Header、空行和 Body。传入后作为相似度参照；实际连通性响应通过校验后仍作为第一个扫描 baseline。响应报文必须是合法 HTTP 响应且总大小不超过 5 MB。
 - `scan_type`：可选数组，省略或传空数组时默认 `normal`。仅传 `["passive"]`、`["normal"]` 或 `["deep"]` 时使用对应预设；否则数组中的每一项都按插件 ID 处理，只运行明确传入的插件。
 - `scheme`：可选，`auto`、`http`、`https`，默认 `auto`。
 - `host`：可选的域名到 IP 映射对象，例如 `{"test.icbc.com":"122.223.22.22"}`。连接使用指定 IP，但原始 Host Header 和 HTTPS TLS SNI 仍保留域名；不修改系统 hosts，也不执行外部 DNS。该参数不能与显式 HTTP 代理同时使用。

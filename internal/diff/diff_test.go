@@ -77,6 +77,23 @@ func TestSimilarityStatusEmptyAndBaselineStability(t *testing.T) {
 	}
 }
 
+func TestSimilarityDetectsEmptyBusinessResult(t *testing.T) {
+	cfg := config.Default()
+	original := model.Response{
+		StatusCode: 200,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       []byte(`{"code":"000000","data":[{"id":1}]}`),
+	}
+	expired := model.Response{
+		StatusCode: 200,
+		Headers:    map[string]string{"content-type": "application/json"},
+		Body:       []byte(`{"code":"000000","data":[]}`),
+	}
+	if score := Similarity(original, expired, cfg); score >= 0.80 {
+		t.Fatalf("empty business result was too similar to the original response: %f", score)
+	}
+}
+
 func TestRepresentativeBaselineChoosesStableMedoid(t *testing.T) {
 	cfg := config.Default()
 	responses := []model.Response{

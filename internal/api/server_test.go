@@ -885,19 +885,18 @@ func TestJungleHappyScanReturnsTerminalResultWithoutPolling(t *testing.T) {
 	}
 }
 
-func TestJungleHappyScanUsesProvidedOriginalResponseAsBaseline(t *testing.T) {
+func TestJungleHappyScanComparesProvidedOriginalResponseAfterConnectivity(t *testing.T) {
 	var requests atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = io.WriteString(w, "network response")
+		w.Header().Set("Content-Type", "application/json")
 	}))
 	defer target.Close()
 	scanner := newTestServer(t, target)
 	defer scanner.Close()
 	targetURL, _ := url.Parse(target.URL)
 	rawRequest := fmt.Sprintf("POST /api/user HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
-	rawResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nX-Upstream: captured\r\n\r\n<html>原始响应</html>"
+	rawResponse := "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Upstream: captured\r\n\r\n{\"code\":\"000000\",\"data\":[{\"id\":1}]}"
 	payload, _ := json.Marshal(map[string]any{
 		"http": rawRequest, "response": rawResponse, "scheme": "http",
 		"scan_type": []string{"security_headers"},
@@ -914,11 +913,51 @@ func TestJungleHappyScanUsesProvidedOriginalResponseAsBaseline(t *testing.T) {
 	scan, _ := result["scan"].(map[string]any)
 	findings, _ := result["findings"].([]any)
 	connectivity, _ := result["connectivity"].(map[string]any)
-	if response.StatusCode != http.StatusOK || scan["status"] != "completed" || connectivity["status_code"] != float64(200) {
-		t.Fatalf("provided original response did not complete scan: status=%d payload=%#v", response.StatusCode, result)
+	if response.StatusCode != http.StatusOK || scan["status"] != "failed" || connectivity["status_code"] != float64(200) {
+		t.Fatalf("empty 200 response was not rejected against original response: status=%d payload=%#v", response.StatusCode, result)
 	}
-	if len(findings) == 0 || requests.Load() != 0 {
-		t.Fatalf("scanner did not use the provided response baseline: findings=%d target_requests=%d", len(findings), requests.Load())
+	if len(findings) != 0 || requests.Load() != 1 {
+		t.Fatalf("scanner must compare after one real connectivity request: findings=%d target_requests=%d", len(findings), requests.Load())
+	}
+	if connectivity["ok"] != false || connectivity["network_ok"] != true || connectivity["auth_valid"] != false ||
+		connectivity["reason"] != "auth_denied" || connectivity["original_response_provided"] != true ||
+		connectivity["response_similarity"] != float64(0) || connectivity["response_similarity_threshold"] != float64(originalResponseSimilarityThreshold) ||
+		!strings.HasPrefix(connectivity["matched_rule"].(string), "original_response_similarity[") {
+		t.Fatalf("response similarity gate diagnostics are incomplete: %#v", connectivity)
+	}
+}
+
+func TestJungleHappyScanAllowsMatchingOriginalResponseAfterConnectivity(t *testing.T) {
+	var requests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"code":"000000","data":[{"id":1}]}`)
+	}))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	rawRequest := fmt.Sprintf("GET /api/user HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
+	rawResponse := "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"code\":\"000000\",\"data\":[{\"id\":1}]}"
+	payload, _ := json.Marshal(map[string]any{
+		"http": rawRequest, "response": rawResponse, "scheme": "http",
+		"scan_type": []string{"sensitive_data"},
+	})
+	response, err := http.Post(scanner.URL+"/api/v1/jungle_happy_scan", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	scan := result["scan"].(map[string]any)
+	connectivity := result["connectivity"].(map[string]any)
+	if response.StatusCode != http.StatusOK || scan["status"] != "completed" || connectivity["ok"] != true ||
+		connectivity["response_similarity"] != float64(1) || requests.Load() != 1 {
+		t.Fatalf("matching response should pass after real connectivity check: payload=%#v requests=%d", result, requests.Load())
 	}
 }
 

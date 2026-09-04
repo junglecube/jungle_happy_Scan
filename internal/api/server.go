@@ -753,9 +753,14 @@ func synchronousConnectivityView(result engine.ConnectivityResult, sendErr error
 	if result.MatchedRule != "" {
 		view["matched_rule"] = result.MatchedRule
 	}
+	if result.OriginalResponseProvided {
+		view["original_response_provided"] = true
+		view["response_similarity"] = result.OriginalResponseSimilarity
+		view["response_similarity_threshold"] = result.OriginalResponseSimilarityThreshold
+	}
 	if result.AuthValid != nil && !*result.AuthValid {
 		view["ok"] = false
-		view["error"] = "原始报文鉴权预检失败：响应命中 " + result.MatchedRule
+		view["error"] = synchronousAuthFailureMessage(result)
 	}
 	return view
 }
@@ -818,11 +823,9 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	var preflight engine.ConnectivityResult
-	if hasOriginalResponse {
-		preflight, err = s.preflightFromOriginalResponse(input, originalResponse)
-	} else {
-		preflight, err = s.manager.CheckConnectivity(r.Context(), input)
+	preflight, err := s.manager.CheckConnectivity(r.Context(), input)
+	if err == nil && hasOriginalResponse {
+		preflight = compareOriginalResponse(preflight, originalResponse, s.store.Get())
 	}
 	if err != nil {
 		now := time.Now().UTC()
@@ -857,7 +860,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	}
 	if preflight.AuthValid != nil && !*preflight.AuthValid {
 		now := time.Now().UTC()
-		message := "原始报文鉴权预检失败：响应命中 " + preflight.MatchedRule
+		message := synchronousAuthFailureMessage(preflight)
 		failed := model.ScanView{
 			Status: "failed", CreatedAt: now, FinishedAt: &now, ElapsedMS: preflight.ElapsedMS,
 			Error: message, Warnings: []string{},
@@ -912,29 +915,25 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (s *Server) preflightFromOriginalResponse(input model.ScanInput, response model.Response) (engine.ConnectivityResult, error) {
-	cfg := s.store.Get()
-	scheme, automatic, err := input.ResolveScheme(cfg.DefaultScheme)
-	if err != nil {
-		return engine.ConnectivityResult{}, err
+func compareOriginalResponse(preflight engine.ConnectivityResult, original model.Response, cfg config.Config) engine.ConnectivityResult {
+	preflight.OriginalResponseProvided = true
+	preflight.OriginalResponseSimilarity = diff.Similarity(original, preflight.Response, cfg)
+	preflight.OriginalResponseSimilarityThreshold = originalResponseSimilarityThreshold
+	if preflight.AuthValid == nil || !*preflight.AuthValid || preflight.OriginalResponseSimilarity >= originalResponseSimilarityThreshold {
+		return preflight
 	}
-	request, err := httpraw.Parse(input.RawHTTP(), scheme)
-	if err != nil {
-		return engine.ConnectivityResult{}, err
+	authValid := false
+	preflight.AuthValid = &authValid
+	preflight.Reason = "auth_denied"
+	preflight.MatchedRule = fmt.Sprintf("original_response_similarity[%.3f<%.2f]", preflight.OriginalResponseSimilarity, originalResponseSimilarityThreshold)
+	return preflight
+}
+
+func synchronousAuthFailureMessage(result engine.ConnectivityResult) string {
+	if strings.HasPrefix(result.MatchedRule, "original_response_similarity[") {
+		return "原始报文鉴权预检失败：实时响应与传入 response 相似度不足（" + result.MatchedRule + "）"
 	}
-	if !automatic {
-		request = request.WithScheme(scheme)
-	}
-	if requestURL, urlErr := request.URL(); urlErr == nil {
-		response.URL = requestURL
-	}
-	response.RawBytes = int64(len(response.Body))
-	auth := diff.AuthDenied(response, cfg)
-	authValid := !auth.Denied
-	return engine.ConnectivityResult{
-		Response: response, Request: request, NetworkOK: true,
-		AuthValid: &authValid, Reason: auth.Reason, MatchedRule: auth.MatchedRule,
-	}, nil
+	return "原始报文鉴权预检失败：响应命中 " + result.MatchedRule
 }
 
 type v2Finding struct {
@@ -1113,7 +1112,10 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	return result, nil
 }
 
-const maxRawHTTPBytes = 5_000_000
+const (
+	maxRawHTTPBytes                     = 5_000_000
+	originalResponseSimilarityThreshold = 0.80
+)
 
 func (input jungleHappyScanInput) rawHTTP() (string, error) {
 	hasHTTP := strings.TrimSpace(input.HTTP) != ""

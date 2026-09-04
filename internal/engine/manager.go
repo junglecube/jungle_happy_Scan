@@ -32,15 +32,18 @@ type Event struct {
 // ConnectivityResult is the original-request preflight result used by the
 // synchronous facade before it creates a scan task.
 type ConnectivityResult struct {
-	Response          model.Response
-	Request           *httpraw.Request
-	AutoFallback      bool
-	ElapsedMS         int64
-	ClientCertificate *tls.Certificate
-	NetworkOK         bool
-	AuthValid         *bool
-	Reason            string
-	MatchedRule       string
+	Response                            model.Response
+	Request                             *httpraw.Request
+	AutoFallback                        bool
+	ElapsedMS                           int64
+	ClientCertificate                   *tls.Certificate
+	NetworkOK                           bool
+	AuthValid                           *bool
+	Reason                              string
+	MatchedRule                         string
+	OriginalResponseProvided            bool
+	OriginalResponseSimilarity          float64
+	OriginalResponseSimilarityThreshold float64
 }
 
 type Task struct {
