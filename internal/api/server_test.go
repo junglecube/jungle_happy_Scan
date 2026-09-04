@@ -961,6 +961,73 @@ func TestJungleHappyScanAllowsMatchingOriginalResponseAfterConnectivity(t *testi
 	}
 }
 
+func TestPreflightSimilarityIsAddedToEvidenceWithoutReplacingMetrics(t *testing.T) {
+	original := []model.Finding{{Evidence: []model.Evidence{{
+		Summary: "probe", Metrics: map[string]any{"similarity": 0.95, "marker": "kept"},
+	}}}}
+	preflight := engine.ConnectivityResult{
+		OriginalResponseProvided:            true,
+		OriginalResponseSimilarity:          0.42,
+		OriginalResponseSimilarityThreshold: 0.90,
+	}
+
+	annotated := annotatePreflightSimilarity(original, preflight)
+	metrics := annotated[0].Evidence[0].Metrics
+	if metrics["similarity"] != 0.95 || metrics["marker"] != "kept" {
+		t.Fatalf("existing evidence metrics were changed: %#v", metrics)
+	}
+	if metrics["preflight_original_response_provided"] != true ||
+		metrics["preflight_response_similarity"] != 0.42 ||
+		metrics["preflight_response_similarity_threshold"] != 0.90 {
+		t.Fatalf("preflight similarity metrics are incomplete: %#v", metrics)
+	}
+	if _, exists := original[0].Evidence[0].Metrics["preflight_response_similarity"]; exists {
+		t.Fatalf("annotation mutated the original findings: %#v", original)
+	}
+}
+
+func TestJungleHappyScanReturnsPreflightSimilarityInEvidenceMetrics(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, "<!doctype html><html><body>reachable</body></html>")
+	}))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	targetURL, _ := url.Parse(target.URL)
+	rawRequest := fmt.Sprintf("GET /health HTTP/1.1\r\nHost: %s\r\n\r\n", targetURL.Host)
+	rawResponse := "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<!doctype html><html><body>reachable</body></html>"
+	payload, _ := json.Marshal(map[string]any{
+		"http": rawRequest, "response": rawResponse, "scheme": "http", "scan_type": []string{"security_headers"},
+	})
+	response, err := http.Post(scanner.URL+"/api/v1/jungle_happy_scan", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	findings, _ := result["findings"].([]any)
+	connectivity, _ := result["connectivity"].(map[string]any)
+	if response.StatusCode != http.StatusOK || len(findings) == 0 || connectivity["response_similarity"] != float64(1) ||
+		connectivity["response_similarity_threshold"] != float64(0.90) {
+		t.Fatalf("preflight similarity was not returned: status=%d connectivity=%#v findings=%#v", response.StatusCode, connectivity, findings)
+	}
+	finding, _ := findings[0].(map[string]any)
+	evidence, _ := finding["evidence"].([]any)
+	if len(evidence) == 0 {
+		t.Fatalf("finding evidence is missing: %#v", finding)
+	}
+	firstEvidence, _ := evidence[0].(map[string]any)
+	metrics, _ := firstEvidence["metrics"].(map[string]any)
+	if metrics["preflight_original_response_provided"] != true || metrics["preflight_response_similarity"] != float64(1) ||
+		metrics["preflight_response_similarity_threshold"] != float64(0.90) {
+		t.Fatalf("preflight similarity evidence metrics are missing: %#v", metrics)
+	}
+}
+
 func TestJungleHappyScanStopsWhenOriginalRequestIsUnreachable(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	unreachableURL, _ := url.Parse(target.URL)

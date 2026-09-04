@@ -898,6 +898,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	// can branch on scan.status without losing diagnostics or partial findings.
 	view := task.View()
 	findings := task.Findings()
+	findings = annotatePreflightSimilarity(findings, preflight)
 	if lite && !apiV2 {
 		findings = liteFindings(findings)
 	}
@@ -934,6 +935,37 @@ func synchronousAuthFailureMessage(result engine.ConnectivityResult) string {
 		return "原始报文鉴权预检失败：实时响应与传入 response 相似度不足（" + result.MatchedRule + "）"
 	}
 	return "原始报文鉴权预检失败：响应命中 " + result.MatchedRule
+}
+
+// annotatePreflightSimilarity adds diagnostic-only metrics to evidence returned
+// by the synchronous facade. Existing evidence metrics are copied and kept
+// intact; asynchronous and ordinary scan responses are not modified.
+func annotatePreflightSimilarity(findings []model.Finding, preflight engine.ConnectivityResult) []model.Finding {
+	if len(findings) == 0 {
+		return findings
+	}
+	result := make([]model.Finding, len(findings))
+	copy(result, findings)
+	for findingIndex := range result {
+		if len(result[findingIndex].Evidence) == 0 {
+			continue
+		}
+		evidence := append([]model.Evidence(nil), result[findingIndex].Evidence...)
+		for evidenceIndex := range evidence {
+			metrics := make(map[string]any, len(evidence[evidenceIndex].Metrics)+3)
+			for key, value := range evidence[evidenceIndex].Metrics {
+				metrics[key] = value
+			}
+			metrics["preflight_original_response_provided"] = preflight.OriginalResponseProvided
+			if preflight.OriginalResponseProvided {
+				metrics["preflight_response_similarity"] = preflight.OriginalResponseSimilarity
+				metrics["preflight_response_similarity_threshold"] = preflight.OriginalResponseSimilarityThreshold
+			}
+			evidence[evidenceIndex].Metrics = metrics
+		}
+		result[findingIndex].Evidence = evidence
+	}
+	return result
 }
 
 type v2Finding struct {
@@ -1114,7 +1146,7 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 
 const (
 	maxRawHTTPBytes                     = 5_000_000
-	originalResponseSimilarityThreshold = 0.80
+	originalResponseSimilarityThreshold = 0.90
 )
 
 func (input jungleHappyScanInput) rawHTTP() (string, error) {
