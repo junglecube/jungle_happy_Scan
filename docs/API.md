@@ -192,7 +192,7 @@ V1.3 的任务对象还包含：
 该接口使用独立、精简且严格的入参；只传 `http` 即可完成 Normal 扫描：
 
 - `http`：必填，完整 Burp Raw HTTP 报文；不再接受 `http_request` 别名。
-- `response`：可选，完整 `HTTP/1.1` 原始响应报文，包含状态行、Header、空行和 Body。传入后作为相似度参照；实际连通性响应通过校验后仍作为第一个扫描 baseline。响应报文必须是合法 HTTP 响应且总大小不超过 5 MB。
+- `response`：可选，完整 `HTTP/1.1` 原始响应报文，包含状态行、Header、空行和 Body。传入后作为相似度参照；实际连通性响应通过校验后仍作为第一个扫描 baseline。响应报文必须是合法 HTTP 响应且总大小不超过 5 MB。上游结构化流量只提供 `response` 和 `responseHeaders` 时，由 batch 适配器补齐 `HTTP/1.1 200 OK` 状态行后再传入本字段。
 - `scan_type`：可选数组，省略或传空数组时默认 `normal`。仅传 `["passive"]`、`["normal"]` 或 `["deep"]` 时使用对应预设；否则数组中的每一项都按插件 ID 处理，只运行明确传入的插件。
 - `scheme`：可选，`auto`、`http`、`https`，默认 `auto`。
 - `host`：可选的域名到 IP 映射对象，例如 `{"test.icbc.com":"122.223.22.22"}`。连接使用指定 IP，但原始 Host Header 和 HTTPS TLS SNI 仍保留域名；不修改系统 hosts，也不执行外部 DNS。该参数不能与显式 HTTP 代理同时使用。
