@@ -73,3 +73,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: 发布 v3.6.4
+<!-- trellis-session: v=2 fp=1fa79fae014611da -->
+
+**Date**: 2026-09-04
+**Task**: 发布 v3.6.4
+**Branch**: `codex/preflight-auth-connectivity`
+
+### Summary
+
+完成 v3.6.4 发布准备：新增同步扫描鉴权预检、传入 response 相似度校验、预检响应复用为首个基线及机器可读诊断；同步更新版本源、README、内嵌版本页、前端缓存参数、页面断言和 Linux AMD64/ARM64 二进制。go test ./...、go vet ./...、Node 语法检查和差异检查全部通过，发布提交已推送到远程分支。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f225853` | release: bump version to v3.6.4 |
+
+### Status
+
+[OK] **Completed**
