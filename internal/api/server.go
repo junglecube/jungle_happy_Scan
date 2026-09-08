@@ -24,6 +24,7 @@ import (
 
 	"jungle_happy_Scan/internal/callback"
 	"jungle_happy_Scan/internal/config"
+	"jungle_happy_Scan/internal/diff"
 	"jungle_happy_Scan/internal/engine"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
@@ -724,6 +725,46 @@ func rawResponseForDisplay(response model.Response) string {
 	return builder.String()
 }
 
+func synchronousConnectivityView(result engine.ConnectivityResult, sendErr error) map[string]any {
+	usedScheme := ""
+	if result.Request != nil {
+		usedScheme = result.Request.Scheme
+	}
+	view := map[string]any{
+		"ok":            sendErr == nil,
+		"network_ok":    result.NetworkOK,
+		"scheme":        usedScheme,
+		"auto_fallback": result.AutoFallback,
+		"elapsed_ms":    result.ElapsedMS,
+		"reason":        "",
+	}
+	if sendErr != nil {
+		view["reason"] = "transport_error"
+		view["error"] = sendErr.Error()
+		return view
+	}
+	view["status_code"] = result.Response.StatusCode
+	if result.AuthValid != nil {
+		view["auth_valid"] = *result.AuthValid
+	}
+	if result.Reason != "" {
+		view["reason"] = result.Reason
+	}
+	if result.MatchedRule != "" {
+		view["matched_rule"] = result.MatchedRule
+	}
+	if result.OriginalResponseProvided {
+		view["original_response_provided"] = true
+		view["response_similarity"] = result.OriginalResponseSimilarity
+		view["response_similarity_threshold"] = result.OriginalResponseSimilarityThreshold
+	}
+	if result.AuthValid != nil && !*result.AuthValid {
+		view["ok"] = false
+		view["error"] = synchronousAuthFailureMessage(result)
+	}
+	return view
+}
+
 func (s *Server) createScan(w http.ResponseWriter, r *http.Request) {
 	var input model.ScanInput
 	if err := decodeJSON(w, r, &input, 6_000_000); err != nil {
@@ -777,7 +818,15 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	originalResponse, hasOriginalResponse, err := external.originalResponse()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	preflight, err := s.manager.CheckConnectivity(r.Context(), input)
+	if err == nil && hasOriginalResponse {
+		preflight = compareOriginalResponse(preflight, originalResponse, s.store.Get())
+	}
 	if err != nil {
 		now := time.Now().UTC()
 		usedScheme := input.Scheme
@@ -792,7 +841,35 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		result := map[string]any{
 			"scan": failed, "findings": []model.Finding{},
-			"connectivity": map[string]any{"ok": false, "scheme": usedScheme, "auto_fallback": preflight.AutoFallback, "elapsed_ms": preflight.ElapsedMS, "error": err.Error()},
+			"connectivity": func() map[string]any {
+				view := synchronousConnectivityView(preflight, err)
+				if usedScheme != "" {
+					view["scheme"] = usedScheme
+				}
+				return view
+			}(),
+		}
+		if apiV2 {
+			result["api_version"] = "2.0"
+			result["rule_pack_version"] = "2.4.0"
+			result["rule_pack_digest"] = s.rulePackDigest()
+			result["findings"] = []v2Finding{}
+		}
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if preflight.AuthValid != nil && !*preflight.AuthValid {
+		now := time.Now().UTC()
+		message := synchronousAuthFailureMessage(preflight)
+		failed := model.ScanView{
+			Status: "failed", CreatedAt: now, FinishedAt: &now, ElapsedMS: preflight.ElapsedMS,
+			Error: message, Warnings: []string{},
+			Progress: model.Progress{Phase: "connectivity_auth_failed", Percent: 100, Plugins: map[string]model.PluginProgress{}},
+			Coverage: model.Coverage{Complete: false, Plugins: map[string]model.PluginCoverage{}},
+		}
+		result := map[string]any{
+			"scan": failed, "findings": []model.Finding{},
+			"connectivity": synchronousConnectivityView(preflight, nil),
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
@@ -821,16 +898,14 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	// can branch on scan.status without losing diagnostics or partial findings.
 	view := task.View()
 	findings := task.Findings()
+	findings = annotatePreflightSimilarity(findings, preflight)
 	if lite && !apiV2 {
 		findings = liteFindings(findings)
 	}
 	s.manager.Delete(task.ID())
 	result := map[string]any{
 		"scan": view, "findings": findings,
-		"connectivity": map[string]any{
-			"ok": true, "scheme": preflight.Request.Scheme, "auto_fallback": preflight.AutoFallback,
-			"elapsed_ms": preflight.Response.Elapsed.Milliseconds(), "status_code": preflight.Response.StatusCode,
-		},
+		"connectivity": synchronousConnectivityView(preflight, nil),
 	}
 	if apiV2 {
 		result["api_version"] = "2.0"
@@ -839,6 +914,58 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		result["findings"] = convertV2Findings(findings, lite)
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func compareOriginalResponse(preflight engine.ConnectivityResult, original model.Response, cfg config.Config) engine.ConnectivityResult {
+	preflight.OriginalResponseProvided = true
+	preflight.OriginalResponseSimilarity = diff.Similarity(original, preflight.Response, cfg)
+	preflight.OriginalResponseSimilarityThreshold = originalResponseSimilarityThreshold
+	if preflight.AuthValid == nil || !*preflight.AuthValid || preflight.OriginalResponseSimilarity >= originalResponseSimilarityThreshold {
+		return preflight
+	}
+	authValid := false
+	preflight.AuthValid = &authValid
+	preflight.Reason = "auth_denied"
+	preflight.MatchedRule = fmt.Sprintf("original_response_similarity[%.3f<%.2f]", preflight.OriginalResponseSimilarity, originalResponseSimilarityThreshold)
+	return preflight
+}
+
+func synchronousAuthFailureMessage(result engine.ConnectivityResult) string {
+	if strings.HasPrefix(result.MatchedRule, "original_response_similarity[") {
+		return "原始报文鉴权预检失败：实时响应与传入 response 相似度不足（" + result.MatchedRule + "）"
+	}
+	return "原始报文鉴权预检失败：响应命中 " + result.MatchedRule
+}
+
+// annotatePreflightSimilarity adds diagnostic-only metrics to evidence returned
+// by the synchronous facade. Existing evidence metrics are copied and kept
+// intact; asynchronous and ordinary scan responses are not modified.
+func annotatePreflightSimilarity(findings []model.Finding, preflight engine.ConnectivityResult) []model.Finding {
+	if len(findings) == 0 {
+		return findings
+	}
+	result := make([]model.Finding, len(findings))
+	copy(result, findings)
+	for findingIndex := range result {
+		if len(result[findingIndex].Evidence) == 0 {
+			continue
+		}
+		evidence := append([]model.Evidence(nil), result[findingIndex].Evidence...)
+		for evidenceIndex := range evidence {
+			metrics := make(map[string]any, len(evidence[evidenceIndex].Metrics)+3)
+			for key, value := range evidence[evidenceIndex].Metrics {
+				metrics[key] = value
+			}
+			metrics["preflight_original_response_provided"] = preflight.OriginalResponseProvided
+			if preflight.OriginalResponseProvided {
+				metrics["preflight_response_similarity"] = preflight.OriginalResponseSimilarity
+				metrics["preflight_response_similarity_threshold"] = preflight.OriginalResponseSimilarityThreshold
+			}
+			evidence[evidenceIndex].Metrics = metrics
+		}
+		result[findingIndex].Evidence = evidence
+	}
+	return result
 }
 
 type v2Finding struct {
@@ -960,11 +1087,30 @@ func liteFindings(findings []model.Finding) []model.Finding {
 type jungleHappyScanInput struct {
 	HTTP              string            `json:"http"`
 	HTTPBase64        string            `json:"http_base64"`
+	Response          string            `json:"response"`
 	ScanType          []string          `json:"scan_type"`
 	Scheme            string            `json:"scheme"`
 	Host              map[string]string `json:"host"`
 	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
+}
+
+func (input jungleHappyScanInput) originalResponse() (model.Response, bool, error) {
+	if strings.TrimSpace(input.Response) == "" {
+		return model.Response{}, false, nil
+	}
+	if len([]byte(input.Response)) > maxRawHTTPBytes {
+		return model.Response{}, false, fmt.Errorf("response 解码后的 HTTP 报文超过 %d 字节限制", maxRawHTTPBytes)
+	}
+	status, header, body, err := webscan.ParseRawResponse(input.Response)
+	if err != nil {
+		return model.Response{}, false, fmt.Errorf("response 不是合法的 HTTP 响应: %w", err)
+	}
+	headers, headerValues := responseHeaderMaps(header)
+	return model.Response{
+		StatusCode: status, Headers: headers, HeaderValues: headerValues,
+		Body: body, RawBytes: int64(len(body)),
+	}, true, nil
 }
 
 func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model.ScanInput, error) {
@@ -998,7 +1144,10 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	return result, nil
 }
 
-const maxRawHTTPBytes = 5_000_000
+const (
+	maxRawHTTPBytes                     = 5_000_000
+	originalResponseSimilarityThreshold = 0.90
+)
 
 func (input jungleHappyScanInput) rawHTTP() (string, error) {
 	hasHTTP := strings.TrimSpace(input.HTTP) != ""
@@ -1031,6 +1180,17 @@ func cloneHostOverrides(values map[string]string) map[string]string {
 		result[name] = address
 	}
 	return result
+}
+
+func responseHeaderMaps(source http.Header) (map[string]string, map[string][]string) {
+	headers := make(map[string]string, len(source))
+	values := make(map[string][]string, len(source))
+	for name, items := range source {
+		key := strings.ToLower(name)
+		values[key] = append([]string(nil), items...)
+		headers[key] = strings.Join(items, ", ")
+	}
+	return headers, values
 }
 
 func (s *Server) scanRoute(w http.ResponseWriter, r *http.Request) {
