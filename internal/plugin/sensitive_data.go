@@ -12,7 +12,7 @@ import (
 type SensitiveData struct{}
 
 func (SensitiveData) Meta() model.PluginMeta {
-	return PassiveMeta("sensitive_data", "敏感信息泄露", "检测手机号、身份证、银行卡、邮箱、SQL、Java 堆栈、连接串、密钥、JWT、Kubernetes、Docker、路径和 IP。")
+	return PassiveMeta("sensitive_data", "敏感信息泄露", "检测 Flag 标记、手机号、身份证、银行卡、邮箱、SQL、Java 堆栈、连接串、密钥、JWT、Kubernetes、Docker、路径和 IP。")
 }
 
 func (p SensitiveData) Scan(ctx *Context) ([]model.Finding, error) {
@@ -46,7 +46,7 @@ func (p SensitiveData) Scan(ctx *Context) ([]model.Finding, error) {
 				value      string
 				severity   model.Severity
 				confidence model.Confidence
-			}{configured.Name, value, model.SeverityLow, confidence(configured.Confidence, model.ConfidenceFirm)})
+			}{configured.Name, value, model.ParseSeverity(configured.Severity, model.SeverityLow), confidence(configured.Confidence, model.ConfidenceFirm)})
 			break
 		}
 	}
@@ -79,6 +79,11 @@ func validCNID(value string) bool {
 	if len(value) != 18 {
 		return false
 	}
+	// The configured regexp performs the cheap shape/date-range prefilter; keep
+	// this guard here as well for custom callers and persisted legacy rules.
+	if value[6:10] < "1900" || value[6:10] > "2030" {
+		return false
+	}
 	if _, err := time.Parse("20060102", value[6:14]); err != nil {
 		return false
 	}
@@ -95,6 +100,9 @@ func validCNID(value string) bool {
 }
 
 func luhn(value string) bool {
+	if len(value) < 16 || len(value) > 19 || allSameDigits(value) {
+		return false
+	}
 	total := 0
 	parity := len(value) % 2
 	for i := range value {
@@ -111,4 +119,16 @@ func luhn(value string) bool {
 		total += digit
 	}
 	return total%10 == 0
+}
+
+func allSameDigits(value string) bool {
+	if len(value) == 0 {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		if value[i] != value[0] {
+			return false
+		}
+	}
+	return true
 }

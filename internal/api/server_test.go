@@ -617,10 +617,10 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 	}
 	if !bytes.Contains(page, []byte("cfg-rule-payloads")) || !bytes.Contains(page, []byte(`id="cfg-rule-url-keywords"`)) ||
 		!bytes.Contains(page, []byte("jungle.jpg")) || !bytes.Contains(page, []byte("version-view")) ||
-		!bytes.Contains(page, []byte("V3.6.4")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
+		!bytes.Contains(page, []byte("V3.8.3")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
 		!bytes.Contains(page, []byte(`id="assets-view"`)) ||
 		!bytes.Contains(page, []byte(`data-view="proxy"`)) || !bytes.Contains(page, []byte(`data-view="assets"`)) ||
-		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.6.4"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.6.4"`)) ||
+		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.8.3"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.8.3"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-panel"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-forward"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-drop"`)) ||
@@ -648,7 +648,9 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 		!bytes.Contains(page, []byte(`id="plugin-progress"`)) || !bytes.Contains(page, []byte("guide-view")) ||
 		!bytes.Contains(page, []byte("cfg-callback-listen")) || !bytes.Contains(page, []byte("v2-architecture")) ||
 		!bytes.Contains(page, []byte("cfg-global-concurrency")) || !bytes.Contains(page, []byte("cfg-callback-ldap-listen")) || !bytes.Contains(page, []byte("cfg-callback-max-connections")) ||
-		!bytes.Contains(page, []byte("client-tls-file-input")) || !bytes.Contains(page, []byte("cfg-sqli-errors")) ||
+		!bytes.Contains(page, []byte("client-tls-file-input")) || !bytes.Contains(page, []byte("signature-mode")) ||
+		!bytes.Contains(page, []byte("signature-endpoint")) || !bytes.Contains(page, []byte("signature-file-input")) ||
+		!bytes.Contains(page, []byte("cfg-sqli-errors")) ||
 		!bytes.Contains(page, []byte("cfg-excluded-params")) ||
 		bytes.Contains(page, []byte(`<h1>HTTP接口快速扫描引擎</h1>`)) ||
 		bytes.Contains(page, []byte(`id="proxy-title"`)) || bytes.Contains(page, []byte(`id="assets-title"`)) ||
@@ -659,9 +661,9 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 		bytes.Contains(page, []byte(`id="coverage-report"`)) ||
 		bytes.Contains(page, []byte(`id="select-all"`)) ||
 		bytes.Contains(page, []byte(`<select id="scan-mode"`)) || bytes.Contains(page, []byte("cfg-mode")) {
-		t.Fatalf("V3.6.4 UI assets are missing or obsolete controls remain: %s", page)
+		t.Fatalf("V3.8.3 UI assets are missing or obsolete controls remain: %s", page)
 	}
-	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("52 个")) {
+	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("48 个")) {
 		t.Fatalf("Custom must be last and V2 plugin count must be current")
 	}
 	response, err = http.Get(scanner.URL + "/app.js")
@@ -671,7 +673,7 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 	app, _ := io.ReadAll(response.Body)
 	_ = response.Body.Close()
 	if bytes.Contains(app, []byte("backendScanMode")) || bytes.Contains(app, []byte("mode:backendScanMode")) ||
-		!bytes.Contains(app, []byte("const payload=withClientTLS({http,scheme,scan_type})")) ||
+		!bytes.Contains(app, []byte("const payload=withClientTLS({http,scheme,scan_type})")) || !bytes.Contains(app, []byte("signature-files")) || !bytes.Contains(app, []byte("withSignature")) ||
 		!bytes.Contains(app, []byte("pluginGroups")) || !bytes.Contains(app, []byte("resolved_requests")) ||
 		!bytes.Contains(app, []byte("Promise.all([ensurePlugins(),ensureConfig()])")) ||
 		!bytes.Contains(app, []byte("HappyScanEditor.create")) ||
@@ -1065,8 +1067,15 @@ func TestJungleHappyScanPresetResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaultInput.Mode != "normal" || defaultInput.Scheme != "auto" || len(defaultInput.ScanType) != 9 {
+	if defaultInput.Mode != "normal" || defaultInput.Scheme != "auto" || len(defaultInput.ScanType) != 8 {
 		t.Fatalf("http-only input must use normal/auto defaults: %#v", defaultInput)
+	}
+	configuredSignature := &model.SignatureInput{Mode: "http", Endpoint: "http://127.0.0.1:9898/caljs"}
+	signedInput, err := (jungleHappyScanInput{
+		HTTP: "GET / HTTP/1.1\r\nHost: bank.test\r\n\r\n", Signature: configuredSignature,
+	}).scanInput()
+	if err != nil || signedInput.Signature != configuredSignature {
+		t.Fatalf("signature input was not passed through the outer API: %#v err=%v", signedInput, err)
 	}
 	hostInput, err := (jungleHappyScanInput{
 		HTTP: "GET / HTTP/1.1\r\nHost: test.icbc.com\r\n\r\n",
@@ -1076,7 +1085,7 @@ func TestJungleHappyScanPresetResolution(t *testing.T) {
 		t.Fatalf("host override was not passed to scan input: %#v err=%v", hostInput, err)
 	}
 
-	for preset, expected := range map[string]int{"passive": 3, "normal": 9, "deep": 52} {
+	for preset, expected := range map[string]int{"passive": 3, "normal": 8, "deep": 47} {
 		input, err := (jungleHappyScanInput{
 			HTTP: "GET / HTTP/1.1\r\nHost: bank.test\r\n\r\n", ScanType: []string{preset},
 		}).scanInput()

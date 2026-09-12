@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-const currentConfigVersion = 31
+const currentConfigVersion = 32
 
 type SessionIdentifier struct {
 	Location string `json:"location"`
@@ -81,6 +81,7 @@ type PluginRuleConfig struct {
 	ParameterNames []string        `json:"parameter_names,omitempty"`
 	URLKeywords    []string        `json:"url_keywords,omitempty"`
 	Paths          []string        `json:"paths,omitempty"`
+	AllowPaths     []string        `json:"allow_paths,omitempty"`
 	Payloads       []PayloadRule   `json:"payloads,omitempty"`
 	Patterns       []DetectionRule `json:"patterns,omitempty"`
 }
@@ -161,7 +162,7 @@ func Default() Config {
 	return Config{
 		ConfigVersion: currentConfigVersion,
 		Listen:        "0.0.0.0:8888", DefaultScheme: "https", ScanMode: "standard",
-		NormalPlugins:  []string{"sqli", "sqli_extended", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"},
+		NormalPlugins:  []string{"sqli", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"},
 		TimeoutSeconds: 10, MaxConcurrency: 8, MaxActiveScans: 4, RequestsPerSecond: 10,
 		MaxQueuedScans: 32, GlobalMaxConcurrency: 32, PerHostConcurrency: 12, GlobalRequestsPerSecond: 40,
 		MaxResponseBytes: 2_000_000, MaxRequests: 500, BaselineSamples: 2,
@@ -353,6 +354,7 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 			{Name: "JSP 无害执行确认", Kind: "execute_canary", Payload: "jungle-happy-scan-exec.jsp", Mime: "application/octet-stream", Expected: `(?i)(upload(?:ed)?\s+success|successfully\s+uploaded|上传成功|保存成功|"(?:code|status)"\s*:\s*"?(?:0|200|000000)"?)`, Mode: "deep"},
 		}},
 		"sensitive_data": {Patterns: []DetectionRule{
+			{Name: "Flag 标记", Pattern: `(?is)\bflag\{.*?\}`, Severity: "high", Confidence: "certain"},
 			{Name: "Java 异常堆栈", Pattern: `(?m)(?:^|\n)\s*at\s+[a-zA-Z_$][\w$]*(?:\.[\w$]+)+\([^\n]+\.java:\d+\)`, Severity: "medium", Confidence: "certain"},
 			{Name: "SQL 语句", Pattern: `(?is)\b(?:select\s+.{1,200}?\s+from|insert\s+into|update\s+\w+\s+set|delete\s+from)\b.{0,300}`, Severity: "medium", Confidence: "firm"},
 			{Name: "数据库连接串", Pattern: `(?i)jdbc:(?:mysql|postgresql|gaussdb|opengauss|oracle|h2):[^\s"']+`, Severity: "high", Confidence: "certain"},
@@ -552,6 +554,7 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 		"idor": {ParameterNames: []string{"id", "uid", "uuid", "user", "account", "order", "document", "record"}},
 	}
 	splitDeepPluginRules(rules)
+	addSQL381TimingRules(rules)
 	return rules
 }
 
@@ -833,7 +836,7 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(pluginID) == "" || len(pluginID) > 128 {
 			return errors.New("plugin_rules 包含无效插件 ID")
 		}
-		if len(rule.ParameterNames) > 500 || len(rule.URLKeywords) > 100 || len(rule.Paths) > 500 || len(rule.Payloads) > 1000 || len(rule.Patterns) > 1000 {
+		if len(rule.ParameterNames) > 500 || len(rule.URLKeywords) > 100 || len(rule.Paths) > 500 || len(rule.AllowPaths) > 500 || len(rule.Payloads) > 1000 || len(rule.Patterns) > 1000 {
 			return fmt.Errorf("plugin_rules[%q] 规则数量超过限制", pluginID)
 		}
 		for _, name := range rule.ParameterNames {
@@ -849,6 +852,11 @@ func (c Config) Validate() error {
 		for _, targetPath := range rule.Paths {
 			if !strings.HasPrefix(targetPath, "/") || len(targetPath) > 2048 || strings.ContainsAny(targetPath, "\r\n") {
 				return fmt.Errorf("plugin_rules[%q] 包含无效同源路径", pluginID)
+			}
+		}
+		for _, targetPath := range rule.AllowPaths {
+			if strings.Trim(strings.TrimSpace(targetPath), "/") == "" || len(targetPath) > 2048 || strings.ContainsAny(targetPath, "\r\n") {
+				return fmt.Errorf("plugin_rules[%q] 包含无效未授权白名单路径", pluginID)
 			}
 		}
 		for _, payload := range rule.Payloads {
@@ -925,7 +933,7 @@ func validateSQLPayloadRules(pluginID string, payloads []PayloadRule) error {
 		if !allowedKinds[kind] {
 			return fmt.Errorf("plugin_rules[%q] payload %q 的 SQL kind %q 无效", pluginID, payload.Name, payload.Kind)
 		}
-		exactReplacement := pluginID == "sqli_timing" && group == "mysql-sleep-and-select-exact-replace" &&
+		exactReplacement := pluginID == "sqli_timing" && strings.HasSuffix(group, "exact-replace") &&
 			(kind == "time_control" || kind == "time_delay")
 		if !exactReplacement && !strings.Contains(payload.Payload, "{{value}}") {
 			return fmt.Errorf("plugin_rules[%q] payload %q 缺少 {{value}} 占位符", pluginID, payload.Name)
@@ -1244,6 +1252,8 @@ func upgradeConfig(cfg *Config) {
 	// V3.6.3 displays evidence with the original values as requested by the
 	// scanner workflow. Clear the old masking default during config upgrade.
 	cfg.RedactEvidence = false
+	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
+	repairSQLTimingControls(cfg.PluginRules)
 	cfg.ConfigVersion = currentConfigVersion
 }
 
@@ -1325,6 +1335,8 @@ func (s *Store) Save(cfg Config) error {
 	cfg = clone(cfg)
 	cfg.ExcludedParameterNames = normalizeUniqueNames(cfg.ExcludedParameterNames)
 	splitDeepPluginRules(cfg.PluginRules)
+	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
+	repairSQLTimingControls(cfg.PluginRules)
 	cfg.ConfigVersion = currentConfigVersion
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -1414,6 +1426,7 @@ func clone(cfg Config) Config {
 	for id, rule := range cfg.PluginRules {
 		rule.ParameterNames = append([]string(nil), rule.ParameterNames...)
 		rule.Paths = append([]string(nil), rule.Paths...)
+		rule.AllowPaths = append([]string(nil), rule.AllowPaths...)
 		rule.Payloads = append([]PayloadRule(nil), rule.Payloads...)
 		rule.Patterns = append([]DetectionRule(nil), rule.Patterns...)
 		out.PluginRules[id] = rule

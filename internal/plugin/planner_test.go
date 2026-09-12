@@ -100,10 +100,9 @@ func TestExecutionPlannerUsesRuntimeSQLCandidatesAndCohortQuanta(t *testing.T) {
 	rule.ParameterNames = nil // Runtime falls back to its canonical candidate names.
 	cfg.PluginRules["mybatis_dynamic_sql"] = rule
 	points := httpraw.DiscoverAdvanced(request, cfg)
-	selected, err := Select([]string{"mybatis_dynamic_sql", "sqli_order_by"}, "normal")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Internal subdetector planning still has to match its runtime candidate
+	// selection, although these are no longer standalone public plugins.
+	selected := []Plugin{MyBatisDynamicSQL{}, SQLOrderBy{}}
 	plans := BuildExecutionPlans(selected, request, points, "normal", cfg, 6)
 	if len(plans) != 2 {
 		t.Fatalf("unexpected plans: %#v", plans)

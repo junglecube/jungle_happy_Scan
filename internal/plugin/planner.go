@@ -169,6 +169,10 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !hasDuplicateCandidate && len(httpraw.SessionPoints(request, cfg.SessionIdentifiers)) == 0 {
 			return false, "没有可重复的参数或会话凭据"
 		}
+	case "unauthorized":
+		if unauthorizedPathAllowed(request, cfg.PluginRules[id].AllowPaths) {
+			return false, "路径在未授权扫描白名单中"
+		}
 	case "graphql_security", "graphql_alias_abuse":
 		if !strings.Contains(target, "graphql") && !strings.Contains(body, `"query"`) {
 			return false, "未识别为 GraphQL 请求"
@@ -228,7 +232,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !strings.Contains(contentType, "json") && !hasNamed([]string{"user", "username", "filter", "query", "search", "where", "id"}) {
 			return false, "没有 NoSQL 查询候选输入"
 		}
-	case "sqli", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
 		if !hasPoints {
 			return false, "没有可变异输入点"
 		}
@@ -239,6 +243,8 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 func estimateRequests(id string, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config) int {
 	count := max(estimatedPointCount(id, points, cfg), 1)
 	switch id {
+	case "sqli_deep":
+		return estimateSQLDeep(request, points, mode, cfg)
 	case "sqli":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
 		errorPairs := pairPayloads(payloads, "error_break", "error_repair")
@@ -262,9 +268,9 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		return count * (paired + gates)
 	case "sqli_extended":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
-		return count * (len(pairPayloads(payloads, "error_break", "error_repair")) + len(pairPayloads(payloads, "boolean_true", "boolean_false"))) * 4
+		return count * (len(pairPayloads(payloads, "error_break", "error_repair")) + len(pairPayloads(payloads, "conditional_control", "conditional_error")) + len(pairPayloads(payloads, "boolean_true", "boolean_false"))) * 4
 	case "sqli_timing":
-		return count * len(pairPayloads(payloadsForMode(cfg.PluginRules[id], mode), "time_control", "time_delay")) * 4
+		return count * len(pairPayloads(payloadsForMode(cfg.PluginRules[id], mode), "time_control", "time_delay")) * 6
 	case "sqli_order_by":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
 		conditionalPairs := pairPayloads(payloads, "conditional_control", "conditional_error")
@@ -408,7 +414,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 
 func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.Config) int {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing":
 		return len(prioritizeSQLPoints(points))
 	case "sqli_order_by", "sqli_limit":
 		return len(namedSQLContextPoints(points, cfg.PluginRules[id].ParameterNames))
@@ -444,7 +450,7 @@ func PlanBudgetQuantum(id string) int {
 
 func pluginPriority(id string) int {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "error_disclosure", "error_disclosure_extended", "file_read", "file_read_encoded", "unauthorized", "command_injection", "command_injection_oast", "command_injection_timing", "xxe", "xxe_extended", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "jwt_active", "proxy_trust_bypass":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "error_disclosure", "error_disclosure_extended", "file_read", "file_read_encoded", "unauthorized", "command_injection", "command_injection_oast", "command_injection_timing", "xxe", "xxe_extended", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "jwt_active", "proxy_trust_bypass":
 		return 4
 	case "reflected_xss", "nosql_injection", "ldap_injection", "xpath_injection", "cors", "crlf_injection", "path_normalization", "parameter_confusion":
 		return 3

@@ -1,6 +1,9 @@
 package plugin
 
 import (
+	"net/url"
+	"strings"
+
 	"jungle_happy_Scan/internal/diff"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
@@ -14,6 +17,11 @@ func (Unauthorized) Meta() model.PluginMeta {
 
 func (p Unauthorized) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
+	rule := ctx.Rule(meta.ID)
+	if unauthorizedPathAllowed(ctx.Request, rule.AllowPaths) {
+		ctx.Progress(meta.ID, 1, 1)
+		return nil, nil
+	}
 	if diff.LikelyAuthDenied(ctx.Baseline, ctx.Config) {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
@@ -76,4 +84,32 @@ func (p Unauthorized) Scan(ctx *Context) ([]model.Finding, error) {
 			ctx.Evidence("删除会话后响应仍与授权基线相似", anonymous, &noSession, map[string]any{"similarity": noSimilarity, "removed": removed}),
 			ctx.Evidence("替换为无效会话后响应仍然相似", invalid, &badSession, map[string]any{"similarity": badSimilarity, "changed": changed}),
 		}, "OWASP WSTG-ATHZ-02")}, nil
+}
+
+// unauthorizedPathAllowed excludes known public endpoints from the
+// unauthorized check. Entries are case-insensitive path fragments, so a
+// configured "login" or "/login" matches /api/login and /api2/Login/.
+func unauthorizedPathAllowed(request *httpraw.Request, allowed []string) bool {
+	if request == nil || len(allowed) == 0 {
+		return false
+	}
+	parsed, err := url.Parse(request.Target)
+	if err != nil {
+		return false
+	}
+	requestPath := strings.ToLower(strings.TrimSpace(parsed.Path))
+	for _, configured := range allowed {
+		candidate := strings.ToLower(strings.TrimSpace(configured))
+		if candidate == "" {
+			continue
+		}
+		if parsedCandidate, err := url.Parse(candidate); err == nil && parsedCandidate.Path != "" {
+			candidate = parsedCandidate.Path
+		}
+		candidate = strings.Trim(strings.ToLower(candidate), "/")
+		if candidate != "" && strings.Contains(requestPath, candidate) {
+			return true
+		}
+	}
+	return false
 }

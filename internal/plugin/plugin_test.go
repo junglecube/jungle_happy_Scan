@@ -46,6 +46,22 @@ func TestRequestedPluginDetections(t *testing.T) {
 		}
 	})
 
+	t.Run("unauthorized-allowlisted-public-path", func(t *testing.T) {
+		ctx := testContext(t, "GET /api2/Login/?next=%2Fhome HTTP/1.1\r\nHost: bank.test\r\nCookie: JSESSIONID=secret\r\n\r\n", model.Response{StatusCode: 200, Headers: jsonHeader(), Body: []byte(`{"ok":true}`)})
+		rule := ctx.Config.PluginRules["unauthorized"]
+		rule.AllowPaths = []string{"login"}
+		ctx.Config.PluginRules["unauthorized"] = rule
+		sends := 0
+		ctx.SendFunc = func(context.Context, *httpraw.Request) (model.Response, error) {
+			sends++
+			return ctx.Baseline, nil
+		}
+		findings, err := (Unauthorized{}).Scan(ctx)
+		if err != nil || len(findings) != 0 || sends != 0 {
+			t.Fatalf("allowlisted public path was not skipped: findings=%#v sends=%d err=%v", findings, sends, err)
+		}
+	})
+
 	t.Run("xxe-file-read", func(t *testing.T) {
 		raw := "POST /xml HTTP/1.1\r\nHost: bank.test\r\nContent-Type: application/xml\r\n\r\n<root><name>alice</name></root>"
 		ctx := testContext(t, raw, model.Response{StatusCode: 200, Headers: map[string]string{"content-type": "application/xml"}, Body: []byte("<ok/>")})
@@ -107,7 +123,7 @@ func TestRequestedPluginDetections(t *testing.T) {
 	})
 
 	t.Run("sensitive-data", func(t *testing.T) {
-		body := `{"phone":"13800138000","id":"11010519491231002X","card":"4111111111111111","email":"ops@example.com","appSecret":"wxSecret_731_abcdefghijkl"}` +
+		body := `{"phone":"13800138000","id":"11010519491231002X","card":"6222021234567894","email":"ops@example.com","appSecret":"wxSecret_731_abcdefghijkl"}` +
 			"\n at com.bank.UserService.query(UserService.java:81)" +
 			"\n/var/run/secrets/kubernetes.io/serviceaccount/token" +
 			"\n{\"auths\":{\"registry.internal\":{\"auth\":\"dXNlcjpwYXNzd29yZA==\"}}}"
@@ -222,6 +238,24 @@ func TestWebConfiguredRulesAreUsed(t *testing.T) {
 		assertFinding(t, findings, err, "sensitive_data")
 		if findings[0].Title != "响应泄露客户编号" {
 			t.Fatalf("custom sensitive rule was not used: %#v", findings[0])
+		}
+	})
+
+	t.Run("sensitive-flag-marker-accepts-arbitrary-content", func(t *testing.T) {
+		ctx := testContext(t, "GET /data HTTP/1.1\r\nHost: bank.test\r\n\r\n", model.Response{StatusCode: 200, Headers: jsonHeader(), Body: []byte("message=flag{anything:中文、空格和换行\n仍然属于内容}")})
+		findings, err := (SensitiveData{}).Scan(ctx)
+		assertFinding(t, findings, err, "sensitive_data")
+		found := false
+		for _, finding := range findings {
+			if finding.Title == "响应泄露Flag 标记" {
+				found = true
+				if finding.Severity != model.SeverityHigh {
+					t.Fatalf("flag marker did not retain configured severity: %#v", finding)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("default flag marker was not detected: %#v", findings)
 		}
 	})
 }
@@ -471,8 +505,8 @@ func TestSQLStopsEscalatingAfterConfirmedErrorSignal(t *testing.T) {
 }
 
 func TestV2RegistryAndDefaultRuleCoverage(t *testing.T) {
-	if len(All()) != 52 {
-		t.Fatalf("expected exactly 52 registered plugins, got %d", len(All()))
+	if len(All()) != 48 {
+		t.Fatalf("expected exactly 48 registered plugins, got %d", len(All()))
 	}
 	cfg := config.Default()
 	for _, id := range []string{"unauthorized", "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe", "xxe_extended", "file_read", "file_read_encoded", "file_upload", "file_upload_execution", "cors", "reflected_xss", "ssrf", "open_redirect", "crlf_injection", "ssti", "command_injection", "command_injection_oast", "command_injection_timing", "csrf", "error_disclosure", "error_disclosure_extended", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mass_assignment_extended", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "graphql_alias_abuse", "sms_abuse", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "host_header_injection"} {
@@ -498,16 +532,16 @@ func TestScanPresets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(passive) != 3 || len(normal) != 9 || len(deep) != 52 {
+	if len(passive) != 3 || len(normal) != 8 || len(deep) != 47 {
 		t.Fatalf("unexpected preset sizes: passive=%d normal=%d deep=%d", len(passive), len(normal), len(deep))
 	}
-	for _, required := range []string{"sqli", "sqli_extended", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"} {
+	for _, required := range []string{"sqli", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"} {
 		if !contains(normal, required) {
 			t.Fatalf("normal preset missing %s: %#v", required, normal)
 		}
 	}
 	selected, err := Select([]string{"sqli_timing"}, "passive")
-	if err != nil || len(selected) != 1 || selected[0].Meta().ID != "sqli_timing" {
+	if err != nil || len(selected) != 1 || selected[0].Meta().ID != "sqli_deep" {
 		t.Fatalf("explicit plugin selection must not be filtered by compatibility mode: selected=%#v err=%v", selected, err)
 	}
 }
@@ -517,7 +551,7 @@ func TestPresetIDsWithNormalUsesConfiguredPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(ids, "sqli_timing") || !contains(ids, "jwt_weak") || contains(ids, "sqli") {
+	if !contains(ids, "sqli_deep") || !contains(ids, "jwt_weak") || contains(ids, "sqli") {
 		t.Fatalf("configured normal preset was not applied: %#v", ids)
 	}
 	empty, err := PresetIDsWithNormal("normal", []string{})
@@ -529,7 +563,7 @@ func TestPresetIDsWithNormalUsesConfiguredPlugins(t *testing.T) {
 func TestExplicitPluginSelectionIgnoresCompatibilityMode(t *testing.T) {
 	for _, mode := range []string{"passive", "normal", "standard", "deep"} {
 		selected, err := Select([]string{"sqli", "sqli_timing"}, mode)
-		if err != nil || len(selected) != 2 {
+		if err != nil || len(selected) != 1 {
 			t.Fatalf("mode %s changed explicit plugin selection: selected=%d err=%v", mode, len(selected), err)
 		}
 	}

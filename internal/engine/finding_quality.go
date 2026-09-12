@@ -44,7 +44,7 @@ func enrichFinding(finding model.Finding) model.Finding {
 	switch finding.PluginID {
 	case "command_injection", "command_injection_oast", "command_injection_timing", "crlf_injection", "ssti", "file_read", "file_read_encoded":
 		score += 10
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "nosql_injection", "ldap_injection", "xpath_injection":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "nosql_injection", "ldap_injection", "xpath_injection":
 		score += 5
 	}
 	score = min(score, 100)
@@ -122,7 +122,7 @@ func deduplicateAndCorrelate(items []model.Finding) ([]model.Finding, []model.Fi
 
 func findingFamily(pluginID string) string {
 	switch pluginID {
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "nosql_injection", "ldap_injection", "xpath_injection", "command_injection", "command_injection_oast", "command_injection_timing", "ssti", "java_expression", "java_expression_extended":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "nosql_injection", "ldap_injection", "xpath_injection", "command_injection", "command_injection_oast", "command_injection_timing", "ssti", "java_expression", "java_expression_extended":
 		return "injection"
 	case "error_disclosure", "error_disclosure_extended", "sensitive_data":
 		return "disclosure"

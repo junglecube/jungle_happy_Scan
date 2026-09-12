@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 VERSION=$(sed -n '1p' "$ROOT/VERSION")
-PACKAGE_VERSION=${VERSION%.*}
+PACKAGE_VERSION=$VERSION
 BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 GO=${GO:-go}
 OUT=${OUT:-"$ROOT/bin"}
@@ -84,6 +84,7 @@ tar -czf "$archive_tmp" \
   --exclude="$root_name/config" \
   --exclude="$root_name/var" \
   --exclude="$root_name/release" \
+  --exclude="$root_name/.tools" \
   --exclude="$root_name/node_modules" \
   --exclude="$root_name/bin/jungle_happy_Scan" \
   -C "$(dirname "$ROOT")" "$root_name"

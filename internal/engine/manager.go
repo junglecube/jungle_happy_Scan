@@ -21,6 +21,7 @@ import (
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
 	"jungle_happy_Scan/internal/plugin"
+	"jungle_happy_Scan/internal/signing"
 	"jungle_happy_Scan/internal/transport"
 )
 
@@ -37,6 +38,7 @@ type ConnectivityResult struct {
 	AutoFallback                        bool
 	ElapsedMS                           int64
 	ClientCertificate                   *tls.Certificate
+	Signer                              signing.Signer
 	NetworkOK                           bool
 	AuthValid                           *bool
 	Reason                              string
@@ -72,6 +74,7 @@ type Task struct {
 	doneOnce          sync.Once
 	preflight         *ConnectivityResult
 	clientCertificate *tls.Certificate
+	signer            signing.Signer
 	expireCtx         context.Context
 	expireCancel      context.CancelFunc
 	lastProgressEvent time.Time
@@ -414,14 +417,18 @@ func (m *Manager) CheckConnectivity(ctx context.Context, input model.ScanInput) 
 	if err != nil {
 		return ConnectivityResult{}, err
 	}
-	client, err := transport.NewWithGovernorAndCertificate(cfg, transport.Hooks{}, m.governor, certificate)
+	signer, err := signing.New(input.Signature)
+	if err != nil {
+		return ConnectivityResult{}, err
+	}
+	client, err := transport.NewWithGovernorAndCertificateAndSigner(cfg, transport.Hooks{}, m.governor, certificate, signer)
 	if err != nil {
 		return ConnectivityResult{}, err
 	}
 	defer client.Close()
 	started := time.Now()
 	response, usedRequest, fellBack, err := client.SendWithSchemeFallback(ctx, request, automatic)
-	result := ConnectivityResult{Response: response, Request: usedRequest, AutoFallback: fellBack, ElapsedMS: time.Since(started).Milliseconds(), ClientCertificate: certificate}
+	result := ConnectivityResult{Response: response, Request: usedRequest, AutoFallback: fellBack, ElapsedMS: time.Since(started).Milliseconds(), ClientCertificate: certificate, Signer: signer}
 	if err != nil {
 		result.Reason = fmt.Sprintf("原始报文连通性检测失败: %s", transport.FriendlyError(err, cfg.TimeoutSeconds))
 		return result, errors.New(result.Reason)
@@ -572,6 +579,15 @@ func (m *Manager) create(input model.ScanInput, preflight *ConnectivityResult) (
 			return nil, err
 		}
 	}
+	var signer signing.Signer
+	if preflight != nil && preflight.Signer != nil {
+		signer = preflight.Signer
+	} else {
+		signer, err = signing.New(input.Signature)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	expireCtx, expireCancel := context.WithCancel(context.Background())
 	task := &Task{
@@ -584,6 +600,7 @@ func (m *Manager) create(input model.ScanInput, preflight *ConnectivityResult) (
 		findingKeys:       make(map[string]struct{}),
 		preflight:         preflight,
 		clientCertificate: certificate,
+		signer:            signer,
 		expireCtx:         expireCtx, expireCancel: expireCancel,
 	}
 	if preflight != nil && preflight.Request != nil {
@@ -690,8 +707,9 @@ func (m *Manager) run(task *Task, mode string) {
 	task.preflight = nil
 	task.mu.Unlock()
 	task.publishProgress(task.View(), true)
-	client, err := transport.NewWithGovernorAndCertificate(task.cfg, transport.Hooks{OnRequest: task.requestSent, OnError: task.networkError}, m.governor, task.clientCertificate)
+	client, err := transport.NewWithGovernorAndCertificateAndSigner(task.cfg, transport.Hooks{OnRequest: task.requestSent, OnError: task.networkError}, m.governor, task.clientCertificate, task.signer)
 	task.clientCertificate = nil
+	task.signer = nil
 	if err != nil {
 		m.finishFailed(task, err)
 		return
@@ -1053,7 +1071,7 @@ func planStage(meta model.PluginMeta) int {
 
 func sqlOracleLane(id string) bool {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql":
 		return true
 	default:
 		return false

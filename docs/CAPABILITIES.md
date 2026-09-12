@@ -16,7 +16,7 @@ V3.4修复Java后端对目标URL追加固定业务路径并使用POST访问时�
 
 V3.3将拦截工作台和资产刷新改为事件驱动长轮询，并按资产、进度、漏洞和拦截拆分Revision；历史第一页通过增量时间索引近似O(10)读取，漏洞汇总按类型延迟加载受影响接口。代理设置、资产、插件、配置和手册按页面加载，超长报文自动降级为低DOM成本的纯文本展示。创建任务主配置压缩为一行，目标URL自动定义主作用域，附加Host进入高级设置。静态资源使用内置默认后缀并允许通过`static_extensions`逐行追加。
 
-V3.0 新增手工浏览器代理入口，但不改变 V2.4 的 52 个检测插件。浏览器正常访问 HTTP 测试系统时，代理负责转发、捕获、静态资源过滤、接口指纹去重和有界排队；扫描执行仍复用单报文引擎及其请求预算、Host 限流、证据分级和覆盖率。
+V3.0 新增手工浏览器代理入口；V3.8.2 将公开检测能力收敛为 48 个插件，并增加敏感信息 Flag 标记检测及未授权公开路径白名单。浏览器正常访问 HTTP 测试系统时，代理负责转发、捕获、静态资源过滤、接口指纹去重和有界排队；扫描执行仍复用单报文引擎及其请求预算、Host 限流、证据分级和覆盖率。
 
 V3.1 在普通 HTTP 转发链路中增加请求、响应两个独立人工拦截点。管理页面可以查看 Raw 报文、原样放行、修改后放行或丢弃；修改请求重新校验 HTTP 语法和任务作用域，修改响应重新校验状态行和 Header。等待队列、超时、历史和报文体积均有硬上限。V3.5 在此基础上增加可选的作用域内 HTTPS MITM；未启用解密时仍由浏览器通过 CONNECT 完成端到端 TLS，HappyScan 不读取 TLS 明文。
 
@@ -41,27 +41,24 @@ WEB任务使用内存热索引和`var/webscan_state`本地压缩恢复文件。�
 ## 扫描模式
 
 - `Passive`：快捷勾选敏感信息、JWT 和安全响应头三个被动插件。
-- `Normal`：快捷勾选全部被动插件和 9 个常见主动插件。
-- `Deep`：快捷勾选全部 52 个插件。
+- `Normal`：快捷勾选全部被动插件和 8 个常见主动插件。
+- `Deep`：勾选 47 项，SQL 深度包含快速，因此取消重复的快速项。
 - `Custom`：保留当前手工勾选组合。
 
 四种模式只是前台插件选择预设。前端向扫描接口提交最终插件 ID 数组，不再提交隐藏的 Payload 强度。异步 V1 API 仍兼容 `mode` 字段，但该字段不会改变已选插件的规则。手工修改任何预设后自动进入 Custom。
 
 V1.4 的 Normal 会自动选择全部 passive 插件，以及 XSS、文件读取、文件上传、异常信息泄露、未授权、CORS、SQL 注入、XXE 和短信漏洞。短信插件会真实高并发发送请求，只能用于已授权测试环境。
 
-高成本能力通过独立插件表达，例如 `sqli_timing`、`command_injection_oast`、`file_read_encoded`、`file_upload_execution`。因此 Normal 不选这些插件，Deep 会选中，Custom 可按需添加；选中后无论从哪个预设进入，其请求序列都一致。
+高成本能力通过独立插件表达，例如 `command_injection_oast`、`file_read_encoded`、`file_upload_execution`。SQL 在 V3.8.2 由 `sqli`（快速）和 `sqli_deep`（深度）承载；深度包含快速以及旧时间、排序、分页、MyBatis 和堆叠能力，旧 SQL ID 映射到深度。
 
-## 52 个插件
+## 48 个插件（V3.8.2）
 
 | ID | 能力 | 默认 | 主要判定方式 |
 |---|---|---:|---|
 | `unauthorized` | 未授权访问 | 是 | 删除全部配置/自动识别凭据后双响应差分；无凭据必登录接口直接判定 |
 | `idor` | 对象级越权 | 是 | 对象标识邻值变异、结构和标识确认 |
-| `sqli` | SQL 注入核心 | 是 | 单引号恢复信号、PostgreSQL/GaussDB 条件错误 A-B-B-A、自定义数据库错误正则和类型适配布尔差分 |
-| `sqli_extended` | SQL 注入扩展差分 | 是 | PostgreSQL/MySQL/GaussDB/MyBatis/存储过程扩展错误与布尔配对 |
-| `sqli_timing` | SQL 时间盲注 | 是 | `pg_sleep`/`SLEEP` 与零延时控制的反向重复对照，包含 MySQL 双引号上下文 |
-| `sqli_order_by` | SQL ORDER BY 注入 | 是 | 可配置排序参数的条件错误与时间配对，不根据普通排序变化报警 |
-| `sqli_limit` | SQL LIMIT/OFFSET 注入 | 是 | 可配置分页参数的注释恢复与引号破坏配对 |
+| `sqli` | SQL 注入（快速） | Normal | 引号破坏/恢复、条件错误和类型适配布尔差分，不执行延迟 |
+| `sqli_deep` | SQL 注入（深度） | Deep | 包含快速、扩展闭合、排序、分页、MyBatis 片段、时间及堆叠；双时长六请求确认 |
 | `xxe` | XXE 核心 | 是 | DTD 展开和本地文件实体 |
 | `xxe_extended` | XXE 扩展与回连 | 是 | XInclude、编码实体与独立 HTTP OAST 确认 |
 | `file_read` | 任意文件读取核心 | 是 | passwd/hosts/proc/version/os-release 的绝对路径/目录穿越与双请求确认 |
@@ -92,7 +89,6 @@ V1.4 的 Normal 会自动选择全部 passive 插件，以及 XSS、文件读取
 | `method_override` | HTTP Method Override 绕过 | 是 | 直接方法拒绝、Header/Spring `_method` 覆盖响应偏离基线并重复确认 |
 | `mass_assignment` | Mass Assignment | 是 | JSON 对象/数组、Query、Form、Multipart 常见绑定敏感字段重复回显 |
 | `mass_assignment_extended` | Mass Assignment 扩展绑定 | 是 | Multipart/Query 混合及无明确内容类型绑定入口 |
-| `mybatis_dynamic_sql` | MyBatis 动态 SQL 片段注入 | 是 | 高风险语义参数、唯一不存在列、破坏/恢复反序确认 |
 | `path_normalization` | URL 路径归一化权限绕过 | 是 | 规范匿名路径拒绝、路径变体两次返回授权内容 |
 | `parameter_confusion` | HTTP 参数污染与身份优先级混淆 | 是 | 同名参数/凭据 A/B/B/A 顺序反转差分 |
 | `json_polymorphic` | Fastjson SafeMode 检测 | 是 | 无害不存在 `@type` 两次确认；只判断 SafeMode，未开启时报高危，不测试 RCE |
@@ -139,13 +135,14 @@ V2.3 对 Query、Form、JSON 字符串、Multipart、Cookie 和配置 Header 中
 - 每条报文可选择 Auto、HTTP 或 HTTPS；Auto 固定先试 HTTP，连接或协议失败后再试 HTTPS，正式扫描沿用成功协议，不依赖持久默认协议。
 - V2.1 可上传 PEM/PFX/P12 客户端 TLS 证书；连通性测试和正式 HTTPS 扫描均带证。同步接口也接受服务器绝对路径 `client_tls_file`，PFX 密码不持久化。
 - V3.5 WEB 代理启用 `intercept_tls` 后，使用本地 HappyScan CA 解密作用域内 HTTPS；同一任务可提供 `client_tls_file` 让代理完成目标站点的上游 mTLS 握手，密码仅存在于创建时内存。
+- V3.8 扫描请求支持可选应用签名适配器：HTTP 接口或上传的本地 JS 脚本。签名发生在请求变异完成后、发包前；未配置时不改变原有扫描行为。
 - 两个同步接口会在创建任务前发送一次未修改的原始报文；成功响应复用为首个基线。HTTP、HTTPS 都不可达时直接返回失败说明和空漏洞数组，不执行插件扫描。
 - 全局 `max_active_scans` 控制同时运行任务数；超出后任务保持 queued，可取消。
 - 单任务 DNS 解析结果缓存并固定到直接连接，重定向每一跳重新校验 Host。
 - 任务取消会传播到网络请求；结果只在内存保留到 TTL 到期。
 - 每个结果包含逐插件覆盖率。`completed` 仅表示任务到达终态，是否完整扫描必须同时检查 `coverage.complete`。
 
-性能取决于目标响应时间、启用插件和配置。`sqli_timing` 与 `command_injection_timing` 会显著增加耗时；是否执行由插件勾选决定，而不是隐藏模式。
+性能取决于目标响应时间、启用插件和配置。`sqli_deep` 与 `command_injection_timing` 会显著增加耗时；SQL 是否执行时间探测由快速/深度选择决定。
 
 ## 联网行为
 

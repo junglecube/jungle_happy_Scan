@@ -421,21 +421,21 @@ func PassiveMeta(id, name, description string) model.PluginMeta {
 }
 
 var registry = []Plugin{
-	Unauthorized{}, SQLInjection{}, SQLInjectionExtended{}, SQLInjectionTiming{}, SQLOrderBy{}, SQLLimit{},
+	Unauthorized{}, SQLInjection{}, SQLInjectionDeep{},
 	XXE{}, XXEExtended{}, FileRead{}, FileReadEncoded{}, FileUpload{}, FileUploadExecution{}, SensitiveData{},
 	CORS{}, ReflectedXSS{}, SSRF{}, OpenRedirect{}, CRLFInjection{},
 	SSTI{}, SpringActuator{}, SecurityHeaders{}, JWTWeak{}, IDOR{},
 	CommandInjection{}, CommandInjectionOAST{}, CommandInjectionTiming{}, CSRF{}, APIExposure{},
 	ErrorDisclosure{}, ErrorDisclosureExtended{}, NoSQLInjection{},
 	LDAPInjection{}, XPathInjection{}, JavaDeserialization{}, MethodOverride{},
-	MassAssignment{}, MassAssignmentExtended{}, MyBatisDynamicSQL{}, PathNormalization{}, ParameterConfusion{},
+	MassAssignment{}, MassAssignmentExtended{}, PathNormalization{}, ParameterConfusion{},
 	JSONPolymorphic{}, GraphQLSecurity{}, GraphQLAliasAbuse{}, SMSAbuse{},
 	Shiro{}, JavaExpression{}, JavaExpressionExtended{}, JNDIInjection{}, HostHeaderInjection{},
 	JWTActive{}, ProxyTrustBypass{}, HTTPTrace{},
 }
 
 var normalActivePluginIDs = map[string]bool{
-	"sqli": true, "sqli_extended": true, "file_upload": true,
+	"sqli": true, "file_upload": true,
 	"file_read": true, "reflected_xss": true, "unauthorized": true,
 	"xxe": true, "sms_abuse": true, "sensitive_data": true,
 }
@@ -451,7 +451,7 @@ func PresetIDsWithNormal(name string, normalPlugins []string) ([]string, error) 
 	normal := normalActivePluginIDs
 	if normalPlugins != nil {
 		normal = make(map[string]bool, len(normalPlugins))
-		for _, id := range normalPlugins {
+		for _, id := range config.NormalizeSQLPluginIDs(normalPlugins, true) {
 			normal[strings.TrimSpace(id)] = true
 		}
 	}
@@ -473,7 +473,7 @@ func PresetIDsWithNormal(name string, normalPlugins []string) ([]string, error) 
 			return nil, fmt.Errorf("未知扫描预设: %s", name)
 		}
 	}
-	return result, nil
+	return config.NormalizeSQLPluginIDs(result, false), nil
 }
 
 func All() []Plugin {
@@ -496,13 +496,16 @@ func Select(ids []string, mode string) ([]Plugin, error) {
 	// entirely defined by plugin IDs (or a preset expanded into plugin IDs).
 	_ = mode
 	selected := make(map[string]bool)
-	for _, id := range ids {
+	for _, id := range config.NormalizeSQLPluginIDs(ids, false) {
 		selected[id] = true
 	}
 	allSelected := selected["all"]
 	var result []Plugin
 	for _, item := range All() {
 		meta := item.Meta()
+		if allSelected && meta.ID == "sqli" {
+			continue
+		}
 		if allSelected || selected[meta.ID] {
 			result = append(result, item)
 			delete(selected, meta.ID)

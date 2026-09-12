@@ -174,6 +174,7 @@ type ScanInput struct {
 	ClientTLS         *ClientTLSInput   `json:"client_tls,omitempty"`
 	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
+	Signature         *SignatureInput   `json:"signature,omitempty"`
 }
 
 // ClientTLSInput carries one request-scoped mutual-TLS identity. Certificate
@@ -185,6 +186,16 @@ type ClientTLSInput struct {
 	File       string `json:"file,omitempty"`
 	Password   string `json:"password,omitempty"`
 	Filename   string `json:"filename,omitempty"`
+}
+
+// SignatureInput carries an optional request-signing adapter. It is request
+// scoped and is never persisted as part of Config or task recovery state.
+type SignatureInput struct {
+	Mode      string `json:"mode"`               // http or local_js
+	Endpoint  string `json:"endpoint,omitempty"` // HTTP signer URL
+	Script    string `json:"script,omitempty"`   // server-side JS path
+	Runtime   string `json:"runtime,omitempty"`  // defaults to node
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
 }
 
 func (s ScanInput) ResolveScheme(defaultScheme string) (scheme string, auto bool, err error) {

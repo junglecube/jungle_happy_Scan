@@ -64,20 +64,53 @@ V3.5 的 `intercept_tls=true` 仅对作用域内 HTTPS 启用中间人解密。�
 
 `client_tls_file` 可选择 HappyScan 服务器上的 PEM/PFX/P12 客户端证书，只能与 `intercept_tls=true` 一起使用，并只用于代理到目标站点的上游 mTLS 握手；浏览器仍只需信任代理 CA。`client_tls_password` 只用于本次创建请求的 PFX/P12 解析，不会出现在任务详情、恢复文件、日志或漏洞报告中。
 
+V3.8 新增可选 `signature` 请求签名适配。扫描器会在每次业务字段变异完成后、发包前调用签名器；签名器通过 JSON 的 `request` 字段接收完整 HTTP 请求标准 Base64，并通过同名字段返回重新签名后的完整 HTTP 请求标准 Base64。未传入 `signature` 时行为不变。
+
+```json
+{
+  "signature": {
+    "mode": "http",
+    "endpoint": "http://127.0.0.1:9898/caljs",
+    "timeout_ms": 5000
+  }
+}
+```
+
+HTTP 签名接口使用 `POST` 和 `application/json`：请求体为 `{"request":"<base64请求>"}`，成功响应体为 `{"request":"<重新签名后的base64请求>"}`。错误响应应使用非 2xx 状态码并返回 `{"error":"..."}`。接口返回的 HTTP 方法、目标和 Host 必须与输入一致，仅允许更新签名相关字段和业务请求内容。
+
+也可以使用本地 JS 脚本：
+
+```json
+{
+  "signature": {
+    "mode": "local_js",
+    "script": "/opt/jungle_happy_Scan/config/signature_scripts/F-PMC.js",
+    "runtime": "node",
+    "timeout_ms": 5000
+  }
+}
+```
+
+本地脚本按 `node F-PMC.js -request <base64请求>` 调用，并从标准输出返回 Base64 报文。脚本上传接口为 `POST /api/v1/signature-files`，使用 `multipart/form-data` 的 `file` 字段，仅支持 `.js`，最大 2 MiB。`signature` 可用于异步扫描、爆破、连通性测试，以及 `jungle_happy_scan`/Lite/V2 同步接口。
+
 任务热摘要保存在当前进程内，完整接口快照异步保存到本地恢复目录；进程重启后可查看恢复任务，但代理不会自动重新监听。明确删除任务时，内存数据与对应恢复目录一起删除。V3 API 不替代下面的 V2 稳定同步接口。
 
 ## V2 稳定同步接口（新调用方推荐）
+
+V3.8.3 SQL 选择：`scan_type:["sqli"]` 为快速；`scan_type:["sqli_deep"]` 为包含快速的深度（扩展闭合、排序、分页、MyBatis、时间和堆叠）。两项同时传入只执行深度。旧 `sqli_extended/sqli_timing/sqli_order_by/sqli_limit/mybatis_dynamic_sql` 在显式 API 选择中映射为深度，结果 `plugin_id` 为 `sqli_deep`；旧规则配置仍保留。`scan_type:["deep"]` 则是全扫描器预设，另含其他漏洞族。
+
+时间确认使用 A-B-B-A-C-A 六请求；C 为半时长，完整证据包含 `pair_order`、`dose_confirmed`、长短差值与局部抖动。预算不足、变异失败、传输超时须结合 coverage 和插件状态判断，不应把未检出等同于无漏洞。用法见 [SQL 快速/深度手册](plugins.md#58-sql-注入快速sqli)。
 
 - `POST /api/v2/jungle_happy_scan`
 - `POST /api/v2/jungle_happy_scan_lite`
 - `GET /api/v2/plugins`
 
-V2.4 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `client_tls_file` 与 `client_tls_password`；只传 `http` 时仍默认 Normal 与 Auto。V2 返回使用 `api_version: "2.0"`（接口主版本保持兼容）、`rule_pack_version: "2.4.0"` 和当前持久规则内容的 `rule_pack_digest`，并将机器字段与中文展示字段分离：
+V3.8.3 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `client_tls_file` 与 `client_tls_password`；只传 `http` 时仍默认 Normal 与 Auto。V2 返回使用 `api_version: "2.0"`（接口主版本保持兼容）、`rule_pack_version: "3.8.3"` 和当前持久规则内容的 `rule_pack_digest`，并将机器字段与中文展示字段分离：
 
 ```json
 {
   "api_version": "2.0",
-  "rule_pack_version": "2.4.0",
+  "rule_pack_version": "3.8.3",
   "rule_pack_digest": "sha256:0123456789abcdef01234567",
   "findings": [{
     "severity": "high",
@@ -127,7 +160,7 @@ V2 Full 的 `evidence.request` 和 `evidence.response` 是漏洞证据视图：�
 - `client_tls_file`：可选，扫描器服务器上的 PEM/PFX/P12 绝对路径。PEM 文件必须同时包含客户端证书链和未加密私钥。
 - `client_tls_password`：可选，仅用于 PFX/P12；不写入持久配置、日志或漏洞报告。
 
-Web 页面只提交勾选后的插件 ID：Passive、Normal、Deep 是快捷勾选预设，Custom 是手工组合。Normal 选择全部被动插件，以及 XSS、文件读取、文件上传、异常信息泄露、未授权、CORS、SQL 注入、XXE、短信漏洞；Deep 选择全部 52 个插件。时间盲注、OAST、编码绕过、上传执行确认等高成本能力有独立插件 ID，可在 Custom 中直接增减。
+Web 页面提交勾选后的插件 ID。V3.8.3 Normal 默认选 8 项（含 SQL 快速），Deep 选 47 项（SQL 深度包含快速并去重），公开插件共 48 项。SQL 仅保留 sqli（快速）与 sqli_deep（深度），后者包含时间盲注和旧专项能力。OAST 等其他漏洞族仍有独立 ID。
 
 响应状态为 `202`：
 

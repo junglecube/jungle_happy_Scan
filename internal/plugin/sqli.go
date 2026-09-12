@@ -43,6 +43,7 @@ func sqlPairMetrics(pair payloadPair, sequence int, role, strength string, extra
 }
 
 type sqlScanProfile struct {
+	ruleID           string
 	errorPairs       bool
 	booleanPairs     bool
 	timePairs        bool
@@ -50,7 +51,9 @@ type sqlScanProfile struct {
 }
 
 func (SQLInjection) Meta() model.PluginMeta {
-	return StandardMeta("sqli", "SQL 注入", "针对 PostgreSQL、GaussDB、MySQL、JDBC/MyBatis 与 CALL/CallableStatement 存储过程执行错误恢复、重复布尔差分和时间对照检测，不提取业务数据。", "active", true)
+	meta := StandardMeta("sqli", "SQL 注入（快速）", "单引号破坏/双单引号及空串恢复、条件错误、按数值/字符串/LIKE 选择布尔差分；反向重复确认，不执行延迟或堆叠探测。", "active", true)
+	meta.Version = "3.8.3"
+	return meta
 }
 
 func (p SQLInjection) Scan(ctx *Context) ([]model.Finding, error) {
@@ -58,7 +61,11 @@ func (p SQLInjection) Scan(ctx *Context) ([]model.Finding, error) {
 }
 
 func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfile) ([]model.Finding, error) {
-	rule := ctx.Rule(meta.ID)
+	ruleID := meta.ID
+	if profile.ruleID != "" {
+		ruleID = profile.ruleID
+	}
+	rule := ctx.Rule(ruleID)
 	payloads := payloadsForMode(rule, ctx.Mode)
 	errorPairs := pairPayloads(payloads, "error_break", "error_repair")
 	conditionalPairs := pairPayloads(payloads, "conditional_control", "conditional_error")
@@ -66,6 +73,7 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 	timePairs := pairPayloads(payloads, "time_control", "time_delay")
 	if !profile.errorPairs {
 		errorPairs = nil
+		conditionalPairs = nil
 	}
 	if !profile.booleanPairs {
 		booleanPairs = nil
@@ -82,8 +90,8 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 		if profile.selectOneBoolean {
 			selectedBooleanPairs = normalSQLBooleanPair(booleanPairs, point)
 		}
-		total += len(errorPairs)*4 + len(conditionalPairs)*4 + len(selectedBooleanPairs)*4 + len(timePairs)*4
-		if meta.ID == "sqli" && len(errorPairs) > 0 {
+		total += len(errorPairs)*4 + len(conditionalPairs)*4 + len(selectedBooleanPairs)*4 + len(timePairs)*6
+		if ruleID == "sqli" && len(errorPairs) > 0 {
 			// The quote gate is a cheap applicability probe. When it signals,
 			// confirmation is a new, atomically reserved A-B-B-A cohort; the gate
 			// response is deliberately not reused as half of that observation.
@@ -98,7 +106,6 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 		baselineErrors[name] = true
 	}
 	baselineStability := diff.BaselineStability(ctx.Baselines, ctx.Config)
-	baselineJitter := responseJitter(ctx.Baselines)
 	var findings []model.Finding
 
 	for _, point := range points {
@@ -114,7 +121,7 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 		// the quote/error-recovery branch; context-selected Boolean and timing
 		// oracles still run, so numeric parameters are not lost behind a string
 		// syntax gate.
-		if meta.ID == "sqli" && len(pointErrorPairs) > 0 {
+		if ruleID == "sqli" && len(pointErrorPairs) > 0 {
 			pair := pointErrorPairs[0]
 			gateReq, mutationErr := ctx.Mutate(point, expandPayload(pair.left.Payload, map[string]string{"value": original}))
 			if mutationErr != nil {
@@ -122,7 +129,7 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 				if profile.selectOneBoolean {
 					selectedBooleanCount = len(normalSQLBooleanPair(booleanPairs, point))
 				}
-				failed := 1 + len(pointErrorPairs)*4 + len(conditionalPairs)*4 + selectedBooleanCount*4 + len(timePairs)*4
+				failed := 1 + len(pointErrorPairs)*4 + len(conditionalPairs)*4 + selectedBooleanCount*4 + len(timePairs)*6
 				ctx.ResolveMutationFailed(failed)
 				done += failed
 				ctx.Progress(meta.ID, done, total)
@@ -295,7 +302,7 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 			if !conditionalAccounted {
 				conditionalRemaining = len(conditionalPairs) * 4
 			}
-			remaining := (len(pointErrorPairs)-errorPairsProcessed)*4 + conditionalRemaining + len(selectedBooleanPairs)*4 + len(timePairs)*4
+			remaining := (len(pointErrorPairs)-errorPairsProcessed)*4 + conditionalRemaining + len(selectedBooleanPairs)*4 + len(timePairs)*6
 			done += remaining
 			ctx.ResolveAdaptivePruned(remaining)
 			ctx.Progress(meta.ID, done, total)
@@ -359,58 +366,30 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 			ctx.Progress(meta.ID, done, total)
 		}
 		if confirmedForPoint {
-			remaining := (len(selectedBooleanPairs)-booleanPairsProcessed)*4 + len(timePairs)*4
+			remaining := (len(selectedBooleanPairs)-booleanPairsProcessed)*4 + len(timePairs)*6
 			done += remaining
 			ctx.ResolveAdaptivePruned(remaining)
 			ctx.Progress(meta.ID, done, total)
 			continue
 		}
-
-		timePairsProcessed := 0
 		timeConfirmed := false
-		for _, pair := range prioritizeSQLTimingPairs(timePairs, point) {
-			timePairsProcessed++
-			responses, requests, err := sendTimingConfirmation(ctx, point, original, pair, func() {
-				done++
+		for index, pair := range prioritizeSQLTimingPairs(timePairs, point) {
+			finding, confirmed, err := probeSQLTiming(ctx, meta, point, pair, func(n int) {
+				done += n
 				ctx.Progress(meta.ID, done, total)
 			})
 			if err != nil {
 				return findings, err
 			}
-			if responses == nil {
-				done += 4
-				ctx.Progress(meta.ID, done, total)
-				continue
-			}
-			controlOne, delayedOne, delayedTwo, controlTwo := responses[0], responses[1], responses[2], responses[3]
-			if !validDifferentialResponses(ctx, responses) {
-				continue
-			}
-			expected := expectedDelay(pair.right.Expected)
-			margin := max(max(1200*time.Millisecond, expected*13/20), baselineJitter*4)
-			deltaOne := delayedOne.Elapsed - controlOne.Elapsed
-			deltaTwo := delayedTwo.Elapsed - controlTwo.Elapsed
-			controlsStable := absDuration(controlOne.Elapsed-controlTwo.Elapsed) <= max(max(900*time.Millisecond, expected/2), baselineJitter*3)
-			delaysStable := absDuration(delayedOne.Elapsed-delayedTwo.Elapsed) <= max(max(1200*time.Millisecond, expected*3/5), baselineJitter*4)
-			if deltaOne >= margin && deltaTwo >= margin && controlsStable && delaysStable {
-				findings = append(findings, Finding(meta, "SQL 时间盲注", model.SeverityHigh, model.ConfidenceCertain, point.Label(),
-					"数据库延迟 payload 在两轮反向顺序测试中均显著慢于同组零延迟对照，符合 PostgreSQL pg_sleep 或 MySQL SLEEP 的执行特征。",
-					"参数全部使用绑定变量；限制数据库账号执行动态 SQL 的权限，并审计存储过程中的动态语句与字符串拼接。",
-					[]model.Evidence{
-						ctx.Evidence("第一轮零延迟对照", requests[0], &controlOne, sqlPairMetrics(pair, 1, "control", "L4", map[string]any{"elapsed_ms": controlOne.Elapsed.Milliseconds(), "payload_rule": pair.left.Name})),
-						ctx.Evidence("第一轮数据库延迟", requests[1], &delayedOne, sqlPairMetrics(pair, 2, "delay", "L4", map[string]any{"elapsed_ms": delayedOne.Elapsed.Milliseconds(), "delta_ms": deltaOne.Milliseconds(), "baseline_jitter_ms": baselineJitter.Milliseconds(), "payload_rule": pair.right.Name})),
-						ctx.Evidence("反向复核数据库延迟", requests[2], &delayedTwo, sqlPairMetrics(pair, 3, "delay", "L4", map[string]any{"elapsed_ms": delayedTwo.Elapsed.Milliseconds(), "delta_ms": deltaTwo.Milliseconds()})),
-						ctx.Evidence("反向复核零延迟对照", requests[3], &controlTwo, sqlPairMetrics(pair, 4, "control", "L4", map[string]any{"elapsed_ms": controlTwo.Elapsed.Milliseconds()})),
-					}, "OWASP WSTG-INPV-05"))
+			if confirmed {
+				findings = append(findings, finding)
 				timeConfirmed = true
+				remaining := (len(timePairs) - index - 1) * 6
+				done += remaining
+				ctx.ResolveAdaptivePruned(remaining)
+				ctx.Progress(meta.ID, done, total)
 				break
 			}
-		}
-		if timeConfirmed {
-			remaining := (len(timePairs) - timePairsProcessed) * 4
-			done += remaining
-			ctx.ResolveAdaptivePruned(remaining)
-			ctx.Progress(meta.ID, done, total)
 		}
 		if !timeConfirmed && pendingQuoteFinding != nil {
 			if len(quoteRecoveryGroups) >= 2 {
@@ -484,12 +463,15 @@ func prioritizeSQLTimingPairs(pairs []payloadPair, point httpraw.InsertionPoint)
 	case "like-string", "string":
 		preferred = []string{
 			"mysql-sleep-and-select-exact-replace",
+			"postgres-reported-tail-exact-replace",
+			"postgres-parenthesis-tail-exact-replace",
+			"postgres-balanced-tail-exact-replace",
 			"mysql-sleep-and-select-template-close",
 			"mysql-sleep-string",
 			"mysql-sleep-or-select-string",
 		}
 	default:
-		preferred = []string{"mysql-sleep-and", "postgres-pg-sleep-and", "gaussdb-pg-sleep-and"}
+		preferred = []string{"mysql-sleep-and", "postgres-pg-sleep-and", "mysql-sleep-and-select-exact-replace", "postgres-reported-tail-exact-replace", "postgres-parenthesis-tail-exact-replace"}
 	}
 	result := make([]payloadPair, 0, len(pairs))
 	used := make(map[int]bool, len(pairs))
