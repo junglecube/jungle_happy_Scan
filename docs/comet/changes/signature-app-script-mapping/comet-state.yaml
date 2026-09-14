@@ -3,7 +3,7 @@ name: signature-app-script-mapping
 language: zh-CN
 phase: build
 status: active
-state_version: 5
+state_version: 12
 brief: brief.md
 shape_confirmation_hash: f24cf4cd693203511ec27f7999721537ba46e7c73b5e788cb8c09c9ae6614b79
 spec_changes: []
@@ -13,15 +13,23 @@ workspace:
   target_branch: main
   finish: null
 loop:
-  stage: building
+  stage: repairing
   goal_cycle: 2
-  iteration: 1
+  iteration: 2
   attempt: 0
-  retry_epoch: 0
+  retry_epoch: 1
   failed_iteration_count: 0
   no_progress_count: 0
   execution_failure_count: 0
-  previous_unresolved_ids: []
+  previous_unresolved_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
   next_action: submit-builder-candidate
 acceptance:
   - id: A1
@@ -64,7 +72,58 @@ acceptance:
     text: THEN 接口返回 `400`，且不会执行目录外的脚本。
     result: pending
     reason: null
-builder_handoff: null
+builder_handoff:
+  candidate_id: 5c8adfc1-494a-4fcc-97df-653d1f7c459f
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:c1cd3610-e5db-4089-827e-1b4f0734efe8
+  iteration: 1
+  summary:
+    text: 实现 signature_app_name：在固定 signature_scripts 目录中按大小写不敏感方式选择唯一 .js 脚本，转换为既有
+      local_js 签名器；覆盖异步扫描、连通性、爆破/重放和同步 V1/V2 Lite/非 Lite 路径；保留旧 signature
+      对象并拒绝混用；更新 API 文档和解析单测。提交 d385a8c。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  checks:
+    - name:
+        text: gofmt and git diff --check
+        truncated: false
+      result: passed
+      note:
+        text: Modified Go files were gofmt'd; git diff --check passed.
+        truncated: false
+    - name:
+        text: go test ./internal/api ./internal/signing ./internal/engine
+        truncated: false
+      result: not-run
+      note:
+        text: Repository baseline contains committed merge-conflict markers; syntax
+          errors begin in internal/api/server_test.go and
+          internal/config/config.go.
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: Full Go test execution is blocked by 63 pre-existing conflict-marker lines
+        in upstream code, including production packages.
+      truncated: false
+  known_limits_truncated: false
+  review:
+    status: passed
+    summary:
+      text: Independent read-only review passed. It confirmed all required API entry
+        coverage, fixed-directory-only resolution, case-insensitive ambiguity
+        rejection, compatibility, and no whitespace errors; it independently
+        identified the unrelated repository compile blocker.
+      truncated: false
+    reviewer_execution_ref: /root/signature_mapping_review
+  submitted_at: 2026-09-14T08:13:03.126Z
 blockers: []
 verification: null
 history:
@@ -77,6 +136,58 @@ history:
       text: Native confirmed acceptance criteria changed
       truncated: false
     completed_at: 2026-09-14T08:05:22.800Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: blocked
+    unresolved_ids:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    summary:
+      text: 独立验证被仓库基线的冲突标记阻断。确认 d385a8c 未引入该阻断，静态实现符合范围，但所有验收均无法进行运行时验证。
+      truncated: false
+    completed_at: 2026-09-14T08:15:14.236Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 用户已授权修复上游已提交的合并冲突标记，以恢复编译并重新验证当前签名应用名改动。
+      truncated: false
+    completed_at: 2026-09-14T08:15:55.268Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 2
+    outcome: blocked
+    unresolved_ids:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    summary:
+      text: 用户已授权但尚未实际修复上游冲突；必须返回 Build 完成冲突解决和端点验证。
+      truncated: false
+    completed_at: 2026-09-14T08:17:39.067Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 2
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 按用户授权返回 Build，实际修复上游已提交的冲突标记，并补充应用名签名入口的运行时验证。
+      truncated: false
+    completed_at: 2026-09-14T08:17:46.822Z
 history_overflow:
   dropped_entries: 0
   first_dropped_at: null

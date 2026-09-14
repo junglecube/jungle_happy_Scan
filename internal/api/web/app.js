@@ -143,7 +143,6 @@ function fillConfig(c){
 $('cfg-sqli-errors').addEventListener('input',()=>{if(state.config)state.config.sqli_error_patterns=regexLines($('cfg-sqli-errors').value)});
 $('cfg-normal-plugins').addEventListener('input',()=>{if(state.config)state.config.normal_plugins=lines($('cfg-normal-plugins').value)});
 
-<<<<<<< HEAD
 window.__simpleSettingsSubmit=async event=>{
   try{captureRule()}catch(error){toast(error.message,true);return}
   const success=regexLines($('cfg-business-success').value),failure=regexLines($('cfg-business-failure').value);
@@ -194,23 +193,13 @@ function showRule(id){
 const rule=state.config.plugin_rules?.[id]||{};setLines('cfg-rule-parameters',rule.parameter_names);setLines('cfg-rule-url-keywords',rule.url_keywords);setLines('cfg-rule-paths',rule.paths);setLines('cfg-rule-allow-paths',rule.allow_paths);$('cfg-rule-payloads').value=JSON.stringify(rule.payloads||[],null,2);$('cfg-rule-patterns').value=JSON.stringify(rule.patterns||[],null,2);$('rule-status').textContent=`${(rule.payloads||[]).length} Payload · ${(rule.patterns||[]).length} 正则`}
 function parseRuleArray(id,label){let value;try{value=JSON.parse($(id).value||'[]')}catch(error){throw new Error(`${label} JSON 格式错误：${error.message}`)}if(!Array.isArray(value))throw new Error(`${label} 必须是 JSON 数组`);return value}
 function captureRule(){if(!state.ruleId)return;const rule={...state.config.plugin_rules[state.ruleId],parameter_names:lines($('cfg-rule-parameters').value),url_keywords:lines($('cfg-rule-url-keywords').value),paths:lines($('cfg-rule-paths').value),allow_paths:lines($('cfg-rule-allow-paths').value),payloads:parseRuleArray('cfg-rule-payloads','Payload'),patterns:parseRuleArray('cfg-rule-patterns','检测正则')};state.config.plugin_rules[state.ruleId]=rule;$('rule-status').textContent=`${rule.payloads.length} Payload · ${(rule.patterns||[]).length} 正则`}
-=======
-function initRuleEditor(){if(!state.config)return;const rules=state.config.plugin_rules||{};const names=Object.keys(rules).sort((a,b)=>{const pa=state.plugins.find(v=>v.id===a)?.name||a;const pb=state.plugins.find(v=>v.id===b)?.name||b;return pa.localeCompare(pb,'zh-CN')});$('cfg-rule-plugin').innerHTML=names.map(id=>`<option value="${esc(id)}">${esc(state.plugins.find(v=>v.id===id)?.name||id)} · ${esc(id)}</option>`).join('');state.ruleId=names[0]||null;if(state.ruleId){$('cfg-rule-plugin').value=state.ruleId;showRule(state.ruleId)}$('cfg-rule-plugin').addEventListener('change',event=>{try{captureRule();state.ruleId=event.target.value;showRule(state.ruleId)}catch(error){event.target.value=state.ruleId;toast(error.message,true)}});$('format-rule-json').addEventListener('click',()=>{try{captureRule();showRule(state.ruleId);toast('规则 JSON 已格式化')}catch(error){toast(error.message,true)}})}
-function showRule(id){const rule=state.config.plugin_rules?.[id]||{};setLines('cfg-rule-parameters',rule.parameter_names);setLines('cfg-rule-url-keywords',rule.url_keywords);setLines('cfg-rule-paths',rule.paths);setLines('cfg-rule-allow-paths',rule.allow_paths);$('cfg-rule-payloads').value=JSON.stringify(rule.payloads||[],null,2);$('cfg-rule-patterns').value=JSON.stringify(rule.patterns||[],null,2);$('rule-status').textContent=`${(rule.payloads||[]).length} Payload · ${(rule.patterns||[]).length} 正则`}
-function parseRuleArray(id,label){let value;try{value=JSON.parse($(id).value||'[]')}catch(error){throw new Error(`${label} JSON 格式错误：${error.message}`)}if(!Array.isArray(value))throw new Error(`${label} 必须是 JSON 数组`);return value}
-function captureRule(){if(!state.ruleId)return;const rule={parameter_names:lines($('cfg-rule-parameters').value),url_keywords:lines($('cfg-rule-url-keywords').value),paths:lines($('cfg-rule-paths').value),allow_paths:lines($('cfg-rule-allow-paths').value),payloads:parseRuleArray('cfg-rule-payloads','Payload'),patterns:parseRuleArray('cfg-rule-patterns','检测正则')};state.config.plugin_rules[state.ruleId]=rule;$('rule-status').textContent=`${rule.payloads.length} Payload · ${(rule.patterns||[]).length} 正则`}
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 
 
 async function loadGuide(){
   const content=$('guide-content'),toc=$('guide-toc');
   if(!content||!toc)return;
   try{
-<<<<<<< HEAD
     const response=await fetch('/plugins.md?v=3.9.0');
-=======
-    const response=await fetch('/plugins.md?v=3.8.3');
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
     if(!response.ok)throw new Error(`使用说明读取失败 (${response.status})`);
     const rendered=renderMarkdown(await response.text());
     content.innerHTML=rendered.html;

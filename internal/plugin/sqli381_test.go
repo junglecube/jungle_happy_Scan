@@ -166,13 +166,8 @@ func TestSQL381FastHasNoDelayAndDeepBudgetIsHonest(t *testing.T) {
 		if sent+pruned != planned {
 			t.Fatalf("%s plan=%d sent=%d pruned=%d", p.Meta().ID, planned, sent, pruned)
 		}
-<<<<<<< HEAD
 		if p.Meta().ID == "sqli" && sent != 21 {
 			t.Fatalf("fast clean parameter cost %d, want 17", sent)
-=======
-		if p.Meta().ID == "sqli" && sent != 5 {
-			t.Fatalf("fast clean parameter cost %d, want 5", sent)
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 		}
 	}
 	ctx := testContext(t, "GET /?query=x HTTP/1.1\r\nHost: bank.test\r\n\r\n", baseline)

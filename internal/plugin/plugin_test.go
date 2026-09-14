@@ -247,11 +247,7 @@ func TestWebConfiguredRulesAreUsed(t *testing.T) {
 		assertFinding(t, findings, err, "sensitive_data")
 		found := false
 		for _, finding := range findings {
-<<<<<<< HEAD
 			if finding.Title == "响应包含Flag 标记" {
-=======
-			if finding.Title == "响应泄露Flag 标记" {
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 				found = true
 				if finding.Severity != model.SeverityHigh {
 					t.Fatalf("flag marker did not retain configured severity: %#v", finding)
