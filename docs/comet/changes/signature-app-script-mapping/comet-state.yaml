@@ -1,0 +1,93 @@
+schema: comet.native.v4
+name: signature-app-script-mapping
+language: zh-CN
+phase: build
+status: active
+state_version: 5
+brief: brief.md
+shape_confirmation_hash: f24cf4cd693203511ec27f7999721537ba46e7c73b5e788cb8c09c9ae6614b79
+spec_changes: []
+workspace:
+  isolation: worktree
+  change_branch: comet/signature-app-script-mapping
+  target_branch: main
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 2
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: GIVEN 固定脚本目录中存在 `FS_PMC.js`
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: WHEN 任一支持签名的扫描入口收到 `"signature_app_name":"FS_PMC"`
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: "THEN 扫描器以该脚本和默认 Node 运行时重签每次变异后的请求。 Scenario: 旧签名对象保持可用"
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: GIVEN 调用方提供现有 `signature` 对象
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: WHEN 请求进入任一支持签名的入口
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: "THEN 现有 HTTP 或本地脚本签名行为保持不变。 Scenario: 不明确或不安全的应用名被拒绝"
+    result: pending
+    reason: null
+  - id: A7
+    source: brief.md
+    text: WHEN 请求同时提供 `signature_app_name` 与 `signature`，或应用名不能安全映射到固定目录下的 `.js` 文件
+    result: pending
+    reason: null
+  - id: A8
+    source: brief.md
+    text: THEN 接口返回 `400`，且不会执行目录外的脚本。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history:
+  - goal_cycle: 1
+    iteration: 0
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-09-14T08:05:22.800Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-09-14T07:36:56.399Z
