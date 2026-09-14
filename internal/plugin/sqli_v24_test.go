@@ -42,8 +42,8 @@ func TestSQLV24CleanQuoteGateStillRunsNumericBooleanOracle(t *testing.T) {
 	if len(findings) != 1 || findings[0].Title != "SQL 布尔盲注" {
 		t.Fatalf("clean quote gate suppressed numeric Boolean confirmation: sends=%d findings=%+v", sends, findings)
 	}
-	if sends != 5 {
-		t.Fatalf("expected one quote gate plus A-B-B-A numeric probes, got %d", sends)
+	if sends != 13 {
+		t.Fatalf("expected quote gate, alternative quote recovery and A-B-B-A numeric probes, got %d", sends)
 	}
 }
 
@@ -267,7 +267,7 @@ func TestSQLV24StableLongShellUsesExactBooleanOracle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(findings) != 1 || findings[0].Title != "SQL 布尔盲注" || sends != 5 {
+	if len(findings) != 1 || findings[0].Title != "SQL 布尔盲注" || sends != 13 {
 		t.Fatalf("stable long-shell exact oracle was missed: sends=%d findings=%+v", sends, findings)
 	}
 	if findings[0].Evidence[0].Metrics["exact_oracle"] != true {

@@ -28,6 +28,10 @@ type Hooks struct {
 	OnError   func()
 }
 
+type RequestSigner interface {
+	Sign(context.Context, *httpraw.Request) (*httpraw.Request, error)
+}
+
 type Client struct {
 	cfg               config.Config
 	http              *http.Client
@@ -39,6 +43,7 @@ type Client struct {
 	dnsCache          map[string][]net.IP
 	governor          *Governor
 	clientCertificate *tls.Certificate
+	signer            RequestSigner
 }
 
 func New(cfg config.Config, hooks Hooks) (*Client, error) {
@@ -50,11 +55,16 @@ func NewWithGovernor(cfg config.Config, hooks Hooks, governor *Governor) (*Clien
 }
 
 func NewWithGovernorAndCertificate(cfg config.Config, hooks Hooks, governor *Governor, certificate *tls.Certificate) (*Client, error) {
+	return NewWithGovernorAndCertificateAndSigner(cfg, hooks, governor, certificate, nil)
+}
+
+func NewWithGovernorAndCertificateAndSigner(cfg config.Config, hooks Hooks, governor *Governor, certificate *tls.Certificate, signer RequestSigner) (*Client, error) {
 	dialer := &net.Dialer{Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second, KeepAlive: 30 * time.Second}
 	client := &Client{
 		cfg: cfg, semaphore: make(chan struct{}, cfg.MaxConcurrency),
 		limiter: newRateLimiter(cfg.RequestsPerSecond, cfg.MaxConcurrency), hooks: hooks, dnsCache: make(map[string][]net.IP), governor: governor,
 		clientCertificate: certificate,
+		signer:            signer,
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: !cfg.VerifyTLS} // #nosec G402 -- admin-controlled test setting
 	if certificate != nil {
@@ -168,6 +178,12 @@ func (c *Client) send(ctx context.Context, raw *httpraw.Request, redirectsLeft i
 		return model.Response{}, fmt.Errorf("应用动态请求规则失败: %w", err)
 	}
 	raw = transformed
+	if c.signer != nil {
+		raw, err = c.signer.Sign(ctx, raw)
+		if err != nil {
+			return model.Response{}, fmt.Errorf("应用签名算法失败: %w", err)
+		}
+	}
 	requestURL, err := raw.URL()
 	if err != nil {
 		return model.Response{}, err
@@ -238,7 +254,7 @@ func (c *Client) send(ctx context.Context, raw *httpraw.Request, redirectsLeft i
 	}
 	headers, headerValues := responseHeaderMaps(response.Header)
 	body, charset := responsebody.Decode(body, headers["content-type"])
-	result := model.Response{StatusCode: response.StatusCode, Headers: headers, HeaderValues: headerValues, Body: body, Elapsed: time.Since(start), URL: requestURL, Charset: charset, RawBytes: rawBytes, Truncated: truncated}
+	result := model.Response{StatusCode: response.StatusCode, Headers: headers, HeaderValues: headerValues, Body: body, SentAt: start, Elapsed: time.Since(start), URL: requestURL, Charset: charset, RawBytes: rawBytes, Truncated: truncated}
 	location := response.Header.Get("Location")
 	if c.cfg.FollowRedirects && redirectsLeft > 0 && response.StatusCode >= 300 && response.StatusCode < 400 && location != "" {
 		nextURL, err := parsed.Parse(location)
@@ -340,7 +356,7 @@ func (c *Client) sendRawHTTP1(ctx context.Context, raw *httpraw.Request, parsed 
 	}
 	headers, headerValues := responseHeaderMaps(response.Header)
 	body, charset := responsebody.Decode(body, headers["content-type"])
-	result := model.Response{StatusCode: response.StatusCode, Headers: headers, HeaderValues: headerValues, Body: body, Elapsed: time.Since(started), URL: requestURL, Charset: charset, RawBytes: rawBytes, Truncated: truncated}
+	result := model.Response{StatusCode: response.StatusCode, Headers: headers, HeaderValues: headerValues, Body: body, SentAt: started, Elapsed: time.Since(started), URL: requestURL, Charset: charset, RawBytes: rawBytes, Truncated: truncated}
 	location := response.Header.Get("Location")
 	if c.cfg.FollowRedirects && redirectsLeft > 0 && response.StatusCode >= 300 && response.StatusCode < 400 && location != "" {
 		nextURL, err := parsed.Parse(location)

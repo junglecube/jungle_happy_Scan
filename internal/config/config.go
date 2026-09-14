@@ -15,7 +15,11 @@ import (
 	"sync"
 )
 
-const currentConfigVersion = 31
+<<<<<<< HEAD
+const currentConfigVersion = 33
+=======
+const currentConfigVersion = 32
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 
 type SessionIdentifier struct {
 	Location string `json:"location"`
@@ -71,6 +75,7 @@ type PayloadRule struct {
 }
 
 type DetectionRule struct {
+	Validator  string `json:"validator,omitempty"`
 	Name       string `json:"name"`
 	Pattern    string `json:"pattern"`
 	Severity   string `json:"severity,omitempty"`
@@ -81,6 +86,7 @@ type PluginRuleConfig struct {
 	ParameterNames []string        `json:"parameter_names,omitempty"`
 	URLKeywords    []string        `json:"url_keywords,omitempty"`
 	Paths          []string        `json:"paths,omitempty"`
+	AllowPaths     []string        `json:"allow_paths,omitempty"`
 	Payloads       []PayloadRule   `json:"payloads,omitempty"`
 	Patterns       []DetectionRule `json:"patterns,omitempty"`
 }
@@ -106,7 +112,27 @@ type ResponseExtractor struct {
 	ParallelSafe bool `json:"parallel_safe,omitempty"`
 }
 
+// BusinessRule conditions are ANDed; rules are ORed, with failure always winning.
+type BusinessRule struct {
+	Name        string   `json:"name"`
+	PluginIDs   []string `json:"plugin_ids,omitempty"`
+	URLPattern  string   `json:"url_pattern,omitempty"`
+	Outcome     string   `json:"outcome"`
+	StatusCodes []int    `json:"status_codes,omitempty"`
+	JSONPath    string   `json:"json_path,omitempty"`
+	Equals      *string  `json:"equals,omitempty"`
+	Pattern     string   `json:"pattern,omitempty"`
+}
+type SMSConfig struct {
+	Attempts      int `json:"attempts"`
+	Threshold     int `json:"threshold"`
+	WindowSeconds int `json:"window_seconds"`
+}
 type Config struct {
+	BusinessRules           []BusinessRule              `json:"business_rules"`
+	SMS                     SMSConfig                   `json:"sms"`
+	CallbackWaitSeconds     int                         `json:"callback_wait_seconds"`
+	CallbackLateSeconds     int                         `json:"callback_late_seconds"`
 	ConfigVersion           int                         `json:"config_version"`
 	Listen                  string                      `json:"listen"`
 	DefaultScheme           string                      `json:"default_scheme"`
@@ -160,8 +186,13 @@ type Config struct {
 func Default() Config {
 	return Config{
 		ConfigVersion: currentConfigVersion,
+<<<<<<< HEAD
+		BusinessRules: []BusinessRule{}, SMS: SMSConfig{Attempts: 30, Threshold: 5, WindowSeconds: 60}, CallbackWaitSeconds: 8, CallbackLateSeconds: 120,
+		Listen: "0.0.0.0:8888", DefaultScheme: "https", ScanMode: "standard",
+=======
 		Listen:        "0.0.0.0:8888", DefaultScheme: "https", ScanMode: "standard",
-		NormalPlugins:  []string{"sqli", "sqli_extended", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"},
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+		NormalPlugins:  []string{"sqli", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"},
 		TimeoutSeconds: 10, MaxConcurrency: 8, MaxActiveScans: 4, RequestsPerSecond: 10,
 		MaxQueuedScans: 32, GlobalMaxConcurrency: 32, PerHostConcurrency: 12, GlobalRequestsPerSecond: 40,
 		MaxResponseBytes: 2_000_000, MaxRequests: 500, BaselineSamples: 2,
@@ -353,6 +384,7 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 			{Name: "JSP 无害执行确认", Kind: "execute_canary", Payload: "jungle-happy-scan-exec.jsp", Mime: "application/octet-stream", Expected: `(?i)(upload(?:ed)?\s+success|successfully\s+uploaded|上传成功|保存成功|"(?:code|status)"\s*:\s*"?(?:0|200|000000)"?)`, Mode: "deep"},
 		}},
 		"sensitive_data": {Patterns: []DetectionRule{
+			{Name: "Flag 标记", Pattern: `(?is)\bflag\{.*?\}`, Severity: "high", Confidence: "certain"},
 			{Name: "Java 异常堆栈", Pattern: `(?m)(?:^|\n)\s*at\s+[a-zA-Z_$][\w$]*(?:\.[\w$]+)+\([^\n]+\.java:\d+\)`, Severity: "medium", Confidence: "certain"},
 			{Name: "SQL 语句", Pattern: `(?is)\b(?:select\s+.{1,200}?\s+from|insert\s+into|update\s+\w+\s+set|delete\s+from)\b.{0,300}`, Severity: "medium", Confidence: "firm"},
 			{Name: "数据库连接串", Pattern: `(?i)jdbc:(?:mysql|postgresql|gaussdb|opengauss|oracle|h2):[^\s"']+`, Severity: "high", Confidence: "certain"},
@@ -542,7 +574,7 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 		}},
 		"sms_abuse": {
 			ParameterNames: []string{"mobile", "mobileNo", "mobilePhone", "phone", "phoneNumber", "telephone", "tel", "smsPhone", "receiverMobile"},
-			URLKeywords:    []string{"send"},
+			URLKeywords:    []string{"send", "requestotp", "requestcode"},
 			Payloads:       defaultSMSPayloads(),
 			Patterns: []DetectionRule{
 				{Name: "短信发送成功", Pattern: `(?is)(短信.{0,20}(?:发送|下发).{0,20}成功|验证码.{0,20}(?:发送|下发).{0,20}成功|"(?:code|status)"\s*:\s*"?(?:0|200|000000)"?|"(?:success|successful)"\s*:\s*true)`, Severity: "high", Confidence: "firm"},
@@ -551,7 +583,13 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 		"csrf": {Payloads: []PayloadRule{{Name: "跨站 Origin", Kind: "origin", Payload: "https://jungle-happy-scan.invalid"}}},
 		"idor": {ParameterNames: []string{"id", "uid", "uuid", "user", "account", "order", "document", "record"}},
 	}
+	sensitive := rules["sensitive_data"]
+	for i := range sensitive.Patterns {
+		sensitive.Patterns[i].Validator = legacyValidator(sensitive.Patterns[i].Name)
+	}
+	rules["sensitive_data"] = sensitive
 	splitDeepPluginRules(rules)
+	addSQL381TimingRules(rules)
 	return rules
 }
 
@@ -651,6 +689,9 @@ func defaultSMSPayloads() []PayloadRule {
 }
 
 func (c Config) Validate() error {
+	if err := validateV39(c); err != nil {
+		return err
+	}
 	if c.ConfigVersion < 1 || c.ConfigVersion > currentConfigVersion {
 		return fmt.Errorf("config_version 必须在 1 到 %d 之间", currentConfigVersion)
 	}
@@ -833,7 +874,7 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(pluginID) == "" || len(pluginID) > 128 {
 			return errors.New("plugin_rules 包含无效插件 ID")
 		}
-		if len(rule.ParameterNames) > 500 || len(rule.URLKeywords) > 100 || len(rule.Paths) > 500 || len(rule.Payloads) > 1000 || len(rule.Patterns) > 1000 {
+		if len(rule.ParameterNames) > 500 || len(rule.URLKeywords) > 100 || len(rule.Paths) > 500 || len(rule.AllowPaths) > 500 || len(rule.Payloads) > 1000 || len(rule.Patterns) > 1000 {
 			return fmt.Errorf("plugin_rules[%q] 规则数量超过限制", pluginID)
 		}
 		for _, name := range rule.ParameterNames {
@@ -849,6 +890,11 @@ func (c Config) Validate() error {
 		for _, targetPath := range rule.Paths {
 			if !strings.HasPrefix(targetPath, "/") || len(targetPath) > 2048 || strings.ContainsAny(targetPath, "\r\n") {
 				return fmt.Errorf("plugin_rules[%q] 包含无效同源路径", pluginID)
+			}
+		}
+		for _, targetPath := range rule.AllowPaths {
+			if strings.Trim(strings.TrimSpace(targetPath), "/") == "" || len(targetPath) > 2048 || strings.ContainsAny(targetPath, "\r\n") {
+				return fmt.Errorf("plugin_rules[%q] 包含无效未授权白名单路径", pluginID)
 			}
 		}
 		for _, payload := range rule.Payloads {
@@ -925,7 +971,7 @@ func validateSQLPayloadRules(pluginID string, payloads []PayloadRule) error {
 		if !allowedKinds[kind] {
 			return fmt.Errorf("plugin_rules[%q] payload %q 的 SQL kind %q 无效", pluginID, payload.Name, payload.Kind)
 		}
-		exactReplacement := pluginID == "sqli_timing" && group == "mysql-sleep-and-select-exact-replace" &&
+		exactReplacement := pluginID == "sqli_timing" && strings.HasSuffix(group, "exact-replace") &&
 			(kind == "time_control" || kind == "time_delay")
 		if !exactReplacement && !strings.Contains(payload.Payload, "{{value}}") {
 			return fmt.Errorf("plugin_rules[%q] payload %q 缺少 {{value}} 占位符", pluginID, payload.Name)
@@ -1013,6 +1059,18 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("配置文件校验失败: %w", err)
 	}
 	if needsSave {
+		backup := fmt.Sprintf("%s.pre-v%d.bak", path, currentConfigVersion)
+		f, backupErr := os.OpenFile(backup, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if backupErr == nil {
+			_, backupErr = f.Write(data)
+			closeErr := f.Close()
+			if backupErr == nil {
+				backupErr = closeErr
+			}
+		}
+		if backupErr != nil && !errors.Is(backupErr, os.ErrExist) {
+			return nil, fmt.Errorf("备份旧配置: %w", backupErr)
+		}
 		if err := s.Save(s.cfg); err != nil {
 			return nil, fmt.Errorf("升级配置文件 %s: %w", path, err)
 		}
@@ -1021,6 +1079,14 @@ func Open(path string) (*Store, error) {
 }
 
 func upgradeConfig(cfg *Config) {
+	if cfg.ConfigVersion >= 31 {
+		if cfg.ConfigVersion < 32 {
+			cfg.PluginRules["sqli_timing"] = mergePluginRuleDefaults(cfg.PluginRules["sqli_timing"], Default().PluginRules["sqli_timing"])
+		}
+		upgradeV39(cfg)
+		cfg.ConfigVersion = currentConfigVersion
+		return
+	}
 	defaults := Default()
 	cfg.ExcludedParameterNames = normalizeUniqueNames(cfg.ExcludedParameterNames)
 	if cfg.MaxQueuedScans == 0 {
@@ -1244,6 +1310,12 @@ func upgradeConfig(cfg *Config) {
 	// V3.6.3 displays evidence with the original values as requested by the
 	// scanner workflow. Clear the old masking default during config upgrade.
 	cfg.RedactEvidence = false
+	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
+	repairSQLTimingControls(cfg.PluginRules)
+<<<<<<< HEAD
+	upgradeV39(cfg)
+=======
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	cfg.ConfigVersion = currentConfigVersion
 }
 
@@ -1325,6 +1397,8 @@ func (s *Store) Save(cfg Config) error {
 	cfg = clone(cfg)
 	cfg.ExcludedParameterNames = normalizeUniqueNames(cfg.ExcludedParameterNames)
 	splitDeepPluginRules(cfg.PluginRules)
+	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
+	repairSQLTimingControls(cfg.PluginRules)
 	cfg.ConfigVersion = currentConfigVersion
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -1414,6 +1488,7 @@ func clone(cfg Config) Config {
 	for id, rule := range cfg.PluginRules {
 		rule.ParameterNames = append([]string(nil), rule.ParameterNames...)
 		rule.Paths = append([]string(nil), rule.Paths...)
+		rule.AllowPaths = append([]string(nil), rule.AllowPaths...)
 		rule.Payloads = append([]PayloadRule(nil), rule.Payloads...)
 		rule.Patterns = append([]DetectionRule(nil), rule.Patterns...)
 		out.PluginRules[id] = rule

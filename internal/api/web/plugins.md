@@ -1,6 +1,12 @@
-# jungle_happy_Scan V2.4 插件扫描与配置手册
+<<<<<<< HEAD
+# jungle_happy_Scan V3.9.0 插件扫描与配置手册
 
-> 本文以 V2.4 当前代码为准，面向测试人员、规则维护人员和二次开发人员。V2.4 只改造 SQL 注入能力，其他插件沿用 V2.3。文中的阈值、请求顺序、适用条件和默认规则均来自实际实现，而不是概念性说明。
+> 本文以 V3.9.0 为准。当前修复、业务规则及仅替换二进制升级详见 [V3.9.0 发布说明](RELEASE-v3.9.0.md)。HTTP 签名接口 JSON request 协议、SQL 快速与深度的差异、时间复核及旧配置升级见 2.2、5.8–5.9；其余章节保留对应能力的演进说明。
+=======
+# jungle_happy_Scan V3.8.3 插件扫描与配置手册
+
+> 本文以 V3.8.3 为准。HTTP 签名接口 JSON request 协议、SQL 快速与深度的差异、时间复核及旧配置升级见 2.2、5.8–5.9；其余章节保留对应能力的演进说明。
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 
 ## 1. 使用边界
 
@@ -26,11 +32,11 @@ jungle_happy_Scan 的目标是：输入一条 Burp Suite Raw HTTP 请求，在�
 前台提供四个彩色圆形模式按钮：
 
 - **Passive**：勾选三个被动响应分析插件，不发送漏洞 Payload。
-- **Normal**：勾选全部被动插件，以及 XSS、文件读取、文件上传、异常信息泄露、未授权、CORS、SQL 注入、XXE、短信漏洞。
-- **Deep**：勾选全部 52 个插件，包括时间差分、编码绕过、OAST 和执行确认扩展插件。
+- **Normal**：默认勾选 SQL 快速、文件上传、文件读取、XSS、未授权、XXE、短信和敏感信息共 8 项；以持久配置 normal_plugins 为准。
+- **Deep**：从 48 个公开插件中选择 47 项，SQL 深度已包含快速，因此不重复勾选快速；同时包含其他漏洞族的扩展检测。
 - **Custom**：使用当前手工勾选组合；按钮放在最后，手工增减任何预设后自动进入 Custom。
 
-V2.4 当前实现中，四种模式只是插件选择预设。前端提交最终 `scan_type` 插件 ID 数组；同一个插件不论由 Normal、Deep 还是 Custom 选中，都执行完全相同的请求序列。异步 API 为兼容旧客户端仍接受 `mode`，但它不会改变 Payload 强度。同步总接口继续通过 `scan_type: ["passive"|"normal"|"deep"]` 选择预设，服务端随即展开为插件 ID。
+V3.8.3 中，四种模式只是插件选择预设。前端提交最终 `scan_type` 插件 ID 数组；同一个插件不论由 Normal、Deep 还是 Custom 选中，都执行完全相同的请求序列。异步 API 为兼容旧客户端仍接受 `mode`，但它不会改变 Payload 强度。同步总接口继续通过 `scan_type: ["passive"|"normal"|"deep"]` 选择预设，服务端随即展开为插件 ID。
 
 扫描中心将插件按 SQL 与查询注入、文件与 XML、身份权限与会话、代码与表达式执行、服务端请求与跳转、API/框架/协议配置、响应与业务风险分组。桌面端每行显示两个插件卡片，名称、小字说明和风险类型始终可见；窄屏自动切换为单列。该分组只影响展示，不改变插件 ID、预设或 API。
 
@@ -52,6 +58,14 @@ V2.4 当前实现中，四种模式只是插件选择预设。前端提交最终
 ```
 
 路径必须是扫描器服务器上的绝对路径，不是调用方电脑路径。扩展名必须是 PEM/PFX/P12，文件必须是普通文件且不超过 2 MiB。
+
+### 2.2 应用签名算法
+
+扫描引擎请求报文下方可以选择“签名算法”。签名是可选的，支持 HTTP 接口和上传 JS 文件两种方式。每次参数、Body 或 Header 变异完成后，扫描器先把完整 HTTP 请求编码为标准 Base64，再调用签名器，最后使用签名器返回的 Base64 报文发包。
+
+HTTP 接口使用 `POST` 和 `application/json`。请求体格式为 `{"request":"xxxxxx"}`，成功响应体格式也为 `{"request":"xxxxxx"}`；其中 `xxxxxx` 是完整 HTTP 请求的标准 Base64。失败时建议返回非 2xx 状态码和 `{"error":"错误原因"}`。接口不能改变 HTTP 方法、目标或 Host。
+
+JS 文件按 `node F-PMC.js -request <base64请求>` 执行，脚本必须只向标准输出写入新的 Base64 请求报文。脚本上传接口为 `POST /api/v1/signature-files`，文件字段为 `file`，仅支持 `.js` 且最大 2 MiB。脚本由管理员上传并在扫描器服务器执行，应仅上传可信脚本。
 
 ## 3. 插入点发现能力
 
@@ -258,6 +272,7 @@ V2.3 不再单独显示“扫描覆盖率”明细框。逐个点亮的插件卡
 - `session_identifiers` 应覆盖真实会话 Key；自动识别用于补漏，但明确配置仍最可靠。
 - `denied_patterns` 必须覆盖 CTP/Spring 统一认证失败码。
 - `unauthorized.payloads` 中 `kind: "invalid_session"` 的第一条规则决定无效会话值。
+- `unauthorized.allow_paths` 用于维护本来就不需要登录的公开接口，例如 `login`、`checkHealth`。每行填写一个路径片段；大小写不敏感并按片段模糊匹配，查询参数不参与匹配。命中后会在扫描计划阶段直接跳过未授权检测，不影响其他插件。
 
 示例：
 
@@ -442,217 +457,128 @@ Override 响应必须 2xx、未拒绝，并出现以下至少一种语义变化�
 
 应优先配置“客户端不该控制、但响应可验证”的字段。没有可观测 Expected 的字段不会可靠报警。
 
-## 5.8 SQL 注入（`sqli`）
+## 5.8 SQL 注入（快速，`sqli`）
 
-SQLi 面向 PostgreSQL、MySQL、GaussDB、JDBC、MyBatis 和存储过程，不包含 SQL Server Payload，也不尝试导出数据。
+<<<<<<< HEAD
+> V3.9：快速不再用一个无信号引号探针剪掉全部恢复方式，并保留数值／字符串兜底。历史版本中的单组布尔及固定五次请求说明已被替代。
 
-扫描前会对插入点做稳定排序：Query、JSON、GraphQL Variables、Form 中的业务参数优先，Multipart、Path 次之，会话 Cookie 和通用 Header 靠后；`id/name/app/query/search/filter/where/date/time/code/account/sort/order/limit/offset/page/size` 等名称提高优先级，Token、Session、签名和 Nonce 降低优先级。排序不跳过任何参数，只让高价值参数更早获得请求预算和结果。
+V3.8.3 对外只提供 SQL 注入（快速）与 SQL 注入（深度）两个插件。Normal 默认选择快速；Deep 预设选择深度且取消快速。Custom 可直接选其中一项。服务端也会去重：同时传入 `sqli` 和 `sqli_deep`，只执行一次深度。两项均使用同一任务的 SQL 独占执行阶段，不与该任务其他主动插件交错；独占不覆盖其他扫描任务或目标自身流量。
 
-每个参数还会分类为 `numeric`、`date-string`、`string`、`order-by`、`limit-offset` 或 `header-path`。JSON 中只有原始类型确实是 Number 才按数值上下文处理；字符串 `"20260722"` 不会因为只含数字而误用数值 Payload。排序和分页参数仍由专项插件做更精确的语法探测。
+| 能力 | 快速 `sqli` | 深度 `sqli_deep` |
+|---|---|---|
+| 单引号破坏、双单引号恢复、空字符串拼接恢复 | 包含 | 包含 |
+| 数据库/JDBC/MyBatis 错误与条件错误复核 | 包含 | 包含 |
+| 数字、字符串、LIKE 布尔差分 | 每点选择一组适配规则 | 包含快速，并增加扩展组 |
+| 双引号、括号、注释、OR、CAST 等扩展差分 | 不包含 | 包含 |
+| ORDER BY 排序字段/方向 | 不运行专项 | 条件错误及时间探测 |
+| LIMIT/OFFSET 分页参数 | 不运行专项 | 注释边界及条件错误 |
+| MyBatis 动态列名、表名、排序/分组片段 | 通用错误规则 | 另加重复 canary 专项 |
+| MySQL SLEEP / PostgreSQL、兼容 GaussDB pg_sleep | 不执行 | 双时长确认 |
+| 无数据读写的分号堆叠延迟 | 不执行 | 包含，依赖驱动和上下文 |
 
-### V2.4 准确率内核总览
+快速面向日常单接口排查。默认每个稳定、阴性的普通业务参数通常发送 5 次：一次引号筛选，加一组真/假/假/真布尔复核。筛选出现数据库错误或稳定业务差异时，才展开恢复与条件错误组，因此有信号时会多于 5 次。基线请求另计。快速不因为单引号无异常就跳过布尔检查，也不会运行时间延迟或堆叠语句。
 
-V2.4 把 SQL 判断拆成四层：
+恢复组为 `{{value}}'` / `{{value}}''`，以及 `{{value}}'` / `{{value}}'||''||'`。这里的两个单引号是 SQL 字符串转义，不是双引号字符。每组采用破坏、恢复、恢复、破坏的 A-B-B-A 顺序；用于筛选的第一条请求不冒充确认样本。遇到数据库/JDBC 专属错误，要求两次破坏命中同类新错误、两次恢复回到基线。只有一般字符校验差异而无独立 SQL 证据时，保留待确认或较确定分级，不把所有报错直接视为已确认注入。
 
-1. 单引号 Gate 只判断“错误恢复分支是否值得展开”；
-2. 完整的 A-B-B-A 请求组执行破坏/恢复、真假、正常/错误或控制/延时复核；
-3. 数据库错误、响应差分、JSON/JSP 业务结果和时间差作为相互独立的 Oracle；
-4. 根据证据强度形成疑似、多路径恢复、条件错误、布尔或时间结论。
+条件错误采用常量 CASE/EXP 或 IF/EXP 正常与异常分支，只有恢复信号成立才按数据库错误特征选择有限方言回退。布尔判定要求重复的真响应接近基线、假响应稳定偏离；支持完整 Body 精确比较和同路径 JSON/JSP 业务结果。鉴权失败、406、429 等拒绝响应不作为确认依据。
 
-Gate 响应不再复用为 A-B-B-A 的第一条证据。确认前先原子预留完整四请求组，预算不足时一条也不发送。Gate 没有触发时，只裁剪单引号错误恢复和条件错误分支；数值、布尔及其他上下文仍可继续，修复了“单引号不报错就完全漏扫”的问题。
+SQL 插入点覆盖 Query、Form、JSON/嵌套 JSON、GraphQL 变量、XML、Multipart 和可识别 Path 等业务字段，沿用统一的结构化变异及类型保护；Cookie 和普通 Header 不作为 SQL 探测点。JSON 数字和字符串区分处理，不把所有纯数字字符串强制当作数字。
 
-Query、Form 和 Multipart 文本值新增 `number/date/bool/uuid/string` 词法类型；JSON 仍保留原生类型和无损大整数。SQL 插入点按位置、参数语义、值类型排序，高价值业务参数优先获得预算。`application/*+json` 和缺失/错误 Content-Type 但正文是合法 JSON 的请求也可以发现插入点；XML 属性变异会转义 `&"`、`<`、`>`，避免扫描器自身破坏 XML。
+## 5.9 SQL 注入（深度，`sqli_deep`）
 
-所有 SQL 家族插件在安全主动阶段进入同一条独占 Oracle Lane，不与其他主动插件交错。某插件因证据收敛而提前停止后，未使用预算返回任务共享池，供后续 ORDER BY、LIMIT/OFFSET 或 MyBatis 插件使用。覆盖率明确区分：
+> V3.9：按阶段轮询参数，先让各参数完成低成本布尔检查，再执行常见时间和其他检测。双剂量允许有界重复执行倍率；自定义不支持的时间函数标为覆盖不足，Firm 不因评分自动升级为确认。
 
-- `requests_sent`：实际发送；
-- `adaptive_pruned`：证据收敛后跳过；
-- `mutation_failed`：无法安全生成请求，状态为部分覆盖；
-- `budget_skipped`：完整请求组预算不足，状态为部分覆盖。
+深度包含快速能力。每个参数依次运行快速、适用的排序/分页/MyBatis 专项、优先时间闭合、扩展差分、其余时间规则。已获得“已确认”证据时停止该点的后续探测；弱恢复线索仍继续复核。这样三条已知时间样本会优先于大量方言回退，且不会重复调用六个独立 SQL 插件。
 
-### 错误型
+### 时间盲注：覆盖形式与确认顺序
 
-`kind: error_break` 与 `error_repair` 按相同 `group` 配对，发送顺序为：
+=======
+V3.8.3 对外只提供 SQL 注入（快速）与 SQL 注入（深度）两个插件。Normal 默认选择快速；Deep 预设选择深度且取消快速。Custom 可直接选其中一项。服务端也会去重：同时传入 `sqli` 和 `sqli_deep`，只执行一次深度。两项均使用同一任务的 SQL 独占执行阶段，不与该任务其他主动插件交错；独占不覆盖其他扫描任务或目标自身流量。
 
-1. break；
-2. repair；
-3. repair；
-4. break。
+| 能力 | 快速 `sqli` | 深度 `sqli_deep` |
+|---|---|---|
+| 单引号破坏、双单引号恢复、空字符串拼接恢复 | 包含 | 包含 |
+| 数据库/JDBC/MyBatis 错误与条件错误复核 | 包含 | 包含 |
+| 数字、字符串、LIKE 布尔差分 | 每点选择一组适配规则 | 包含快速，并增加扩展组 |
+| 双引号、括号、注释、OR、CAST 等扩展差分 | 不包含 | 包含 |
+| ORDER BY 排序字段/方向 | 不运行专项 | 条件错误及时间探测 |
+| LIMIT/OFFSET 分页参数 | 不运行专项 | 注释边界及条件错误 |
+| MyBatis 动态列名、表名、排序/分组片段 | 通用错误规则 | 另加重复 canary 专项 |
+| MySQL SLEEP / PostgreSQL、兼容 GaussDB pg_sleep | 不执行 | 双时长确认 |
+| 无数据读写的分号堆叠延迟 | 不执行 | 包含，依赖驱动和上下文 |
 
-两次 break 必须出现相同检测特征，且基线从未出现该特征；两次 repair 均不能出现检测特征，与基线相似度均至少 `0.82`。repair 与 break 的相似度差至少 `0.12`，或状态码族发生变化。
+快速面向日常单接口排查。默认每个稳定、阴性的普通业务参数通常发送 5 次：一次引号筛选，加一组真/假/假/真布尔复核。筛选出现数据库错误或稳定业务差异时，才展开恢复与条件错误组，因此有信号时会多于 5 次。基线请求另计。快速不因为单引号无异常就跳过布尔检查，也不会运行时间延迟或堆叠语句。
 
-如果 Spring/CTP 把数据库异常捕获并改写成普通业务 JSON，break 响应可能没有 SQL/JDBC 关键字。核心插件对此增加严格恢复差分：对 `group` 以 `quote` 开头的配对启用；基线稳定度至少 `0.85`；排除鉴权拒绝、限流和 WAF 拒绝；两次 break 状态码必须一致（允许统一异常处理包装成 500）；两次恢复响应必须非 5xx、与基线状态一致且相似度至少 `0.94`；两次 break 响应自身稳定。明显内容差要求破坏相似度不高于 `0.90` 且恢复差至少 `0.06`；对于很长的 JSP 页面，也接受“两个恢复响应归一化后与基线完全相同、两个破坏响应归一化后彼此完全相同但不等于基线”的细微稳定差异。
+恢复组为 `{{value}}'` / `{{value}}''`，以及 `{{value}}'` / `{{value}}'||''||'`。这里的两个单引号是 SQL 字符串转义，不是双引号字符。每组采用破坏、恢复、恢复、破坏的 A-B-B-A 顺序；用于筛选的第一条请求不冒充确认样本。遇到数据库/JDBC 专属错误，要求两次破坏命中同类新错误、两次恢复回到基线。只有一般字符校验差异而无独立 SQL 证据时，保留待确认或较确定分级，不把所有报错直接视为已确认注入。
 
-默认包含两类恢复配对：
+条件错误采用常量 CASE/EXP 或 IF/EXP 正常与异常分支，只有恢复信号成立才按数据库错误特征选择有限方言回退。布尔判定要求重复的真响应接近基线、假响应稳定偏离；支持完整 Body 精确比较和同路径 JSON/JSP 业务结果。鉴权失败、406、429 等拒绝响应不作为确认依据。
 
-- `{{value}}'` / `{{value}}''`：适合双单引号能够恢复原业务结果的上下文；
-- `{{value}}'` / `{{value}}'||''||'`：适合 PostgreSQL/GaussDB 字符串拼接上下文。后一条关闭原字符串、拼接空字符串再重新打开，数据库计算后的业务值仍等于原值。
+SQL 插入点覆盖 Query、Form、JSON/嵌套 JSON、GraphQL 变量、XML、Multipart 和可识别 Path 等业务字段，沿用统一的结构化变异及类型保护；Cookie 和普通 Header 不作为 SQL 探测点。JSON 数字和字符串区分处理，不把所有纯数字字符串强制当作数字。
 
-仅“原始响应与空字符串拼接响应相同”不会单独报警；还必须满足两次破坏、两次恢复的 A-B-B-A 稳定差分，并继续尝试下述常量条件错误确认。扫描器不调用 `user()`、数据库名或业务表，不提取数据。
+## 5.9 SQL 注入（深度，`sqli_deep`）
 
-### 条件错误差分（V2.1）
+深度包含快速能力。每个参数依次运行快速、适用的排序/分页/MyBatis 专项、优先时间闭合、扩展差分、其余时间规则。已获得“已确认”证据时停止该点的后续探测；弱恢复线索仍继续复核。这样三条已知时间样本会优先于大量方言回退，且不会重复调用六个独立 SQL 插件。
 
-只有上述单引号破坏/双单引号恢复形成稳定信号后，核心 SQLi 才追加一个 MySQL、PostgreSQL 和 GaussDB 均可使用的条件错误对：
+### 时间盲注：覆盖形式与确认顺序
 
-```text
-正常：{{value}}' AND (CASE WHEN 1=1 THEN 731 ELSE EXP(720) END)=731-- 
-错误：{{value}}' AND (CASE WHEN 1=2 THEN 731 ELSE EXP(720) END)=731-- 
-```
-
-发送顺序为正常、错误、错误、正常，即 A-B-B-A。两条 Payload 只有 CASE 谓词不同，不包含数据库名、表名、字段名或数据提取表达式。`EXP(720)` 用于制造只出现在错误分支的数值溢出；正常分支不会执行它。管理员仍可保留 MySQL `IF/EXP` 或 PostgreSQL/GaussDB `CASE/exp` 专属组，但核心扫描每次只选择一个条件组，避免因数据库方言扩充而线性增加请求。判定要求：
-
-- 两次正常分支状态与基线一致、与基线相似度均至少 `0.90`；
-- 两次正常分支彼此相似度至少 `0.94`，两次错误分支彼此至少 `0.90`；
-- 错误分支发生稳定状态码族变化，或每轮相似度差至少 `0.12`；
-- 排除 401、403、406、429 以及登录/授权失败响应；
-- 数据库错误特征不能已存在于基线，且两次正常分支都不能出现该特征。
-
-两次错误分支命中同一数据库错误特征时，报告“SQL 条件错误差分注入”，置信度为**已确认**。没有显式错误文本、但两个错误分支稳定为 5xx 时降为**较确定**。若优化器常量折叠导致正常分支也执行 `exp(720)` 并报错，正常分支无法回到基线，因此不会报警。
-
-【持久配置】→【响应语义】中的“数据库报错特征”用于补充目标特征，每行一条 Go RE2 正则，例如：
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+优先覆盖以下三类报文值（`pg_sleep` 中的下划线是实际 SQL 字符）：
 
 ```text
-(?i)syntax error
-(?i)ORA-\d{5}
-(?is)numeric.{0,40}(?:overflow|out of range)
-(?i)SQLSTATE\s*[:\[]?\s*22003
-(?is)CTP.{0,120}(?:SQLException|数据库异常)
+' AND (SELECT SLEEP(3)) AND '1'='1
+' AND (SELECT 1 FROM pg_sleep(3)) AND '1'='2
+') AND 5014=(SELECT 5014 FROM pg_sleep(3)) AND ('1'='1
 ```
 
-保存时服务端逐条编译；任何无效正则都会拒绝保存并指出 `sqli_error_patterns`。应填写数据库/JDBC/ORM 专属特征，不要填写泛化的 `error`、`message` 或 `500`。本栏与 SQLi 插件 `patterns` 合并参与判定，后者仍可单独配置名称、严重性和置信度。
+同时覆盖精确替换与保留原值追加、数字/单引号/双引号、单层及双层括号、LIKE 尾部、注释终止、OR、MySQL XOR、PostgreSQL 空串拼接以及分号堆叠。PostgreSQL 补充 `5014=(SELECT 5014 FROM pg_sleep(3))` 这种显式布尔比较，避免单纯使用整数子查询作为 AND 操作数。
 
-同一响应可能同时命中 `error`、Spring 包装异常、JDBC 异常和数据库内核错误。V2.4 不采用“配置中最先出现的正则”，而是综合严重性、置信度和数据库/JDBC/MyBatis 专属性选择最高价值的共同证据；通用错误文本不会覆盖更具体的 MySQL、PostgreSQL、GaussDB 或 SQLSTATE 证据。前台简化正则的默认可信度可单独选择，建议保持“较确定”；只有管理员确认规则足够专属时才设为“已确认”。
+第二条保留的是用户实测报文形式，不代表它在标准 PostgreSQL 上普遍合法：标准 PostgreSQL 的 AND 要求布尔值，且常量假分支可能被优化器提前裁剪。真实能否执行还取决于外层 SQL、兼容模式、前置条件是否匹配行及数据库权限。扫描器不会仅凭报文里出现 `pg_sleep` 就报告漏洞。
 
-### 布尔盲注
+每个时间候选最多使用 6 条请求，预先原子预留完整预算：
 
-`boolean_true` 与 `boolean_false` 按 group 配对，顺序为真、假、假、真。仅在基线稳定度至少 `0.85` 时执行。常规阈值会根据基线稳定度自适应；此外支持“真分支完整 Body 精确回基线、假分支两次完整 Body 精确一致且不同”以及同一路径 JSON/JSP 业务结果 Oracle。常规要求包括：
+1. A：零延迟；
+2. B：规则设定延迟（默认旧组 2 秒、新组 3 秒）；
+3. 若 A/B 没有达到延迟门槛或被拒绝，立即结束该组，省去余下 4 次；
+4. 有信号时继续 B、A，完成反向 A-B-B-A；
+5. 再发送 C（B 的一半，如 1.5 秒）及 A，最终顺序为 A-B-B-A-C-A。
 
-- 两次真响应与基线相似度均至少 `0.88`；
-- 两次假响应均不高于 `0.72`；
-- 每轮真假差至少 `0.20`；
-- 两次真、两次假各自相似度至少 `0.90`；
-- 真响应状态码与基线相同。
+执行时以 delay 规则为模板，仅改变 SLEEP/pg_sleep 的秒数，其他谓词、闭合及业务字段不变；避免旧 OR 组同时改变真假条件，把查询工作量变化误当成 SLEEP。保留 `time_control` 配对配置供规则校验和维护，但实际零延迟及半时长探针由 delay 模板派生。
 
-### 时间盲注（独立插件 `sqli_timing`）
+判定要求两次长延迟均超过 `max(800ms, 65% × 设定延迟)`，三个局部零延迟控制的抖动不超过 `max(350ms, 设定延迟/5)`，且长短延迟差随设定时长变化。采用邻近控制样本，避免一次冷连接基线把全任务门槛抬高。固定慢响应、单次卡顿、全体请求都慢、长短探针耗时相同均不满足确认条件。
 
-`time_control` 与 `time_delay` 配对，顺序为 control、delay、delay、control。`expected` 填预期秒数。两轮延时差必须同时超过：
+稳定、同状态的应用 HTTP 500 可以进入时间判定，因为 SQL 可能先执行延迟再由 Java 异常处理器返回错误；401/403/406/408/429/502/503/504、授权失败、不同剂量状态不一致、传输超时和取消不会成为阳性证据。超时/取消返回错误并结束当前插件，不伪装成已完整覆盖。确认报告保留 6 条请求/响应、长短实际时间差、局部抖动和 `dose_confirmed` 等指标。
 
-- 1200ms；
-- 预期延时的 65%；
-- 基线抖动的 4 倍；
+### 排序、分页、MyBatis 和堆叠
 
-三者中的最大值。两次 control 和两次 delay 还必须各自稳定。
+ORDER BY 只对排序字段或方向候选生效，使用常量条件错误和时间对，不把 ASC/DESC 正常排序差异当成注入。LIMIT/OFFSET 只对分页参数执行注释边界、引号恢复与 PostgreSQL/GaussDB 条件错误，不把分页行数变化当成注入。
 
-默认同时包含 MySQL 单引号和双引号字符串闭合时间对。双引号规则用于 `WHERE id="$id"` 一类上下文；如果 MySQL 启用了 `ANSI_QUOTES`，双引号可能按标识符处理，不能保证适用。
+MyBatis 专项只测试列名、表名、排序、分组等候选参数，发送两次不存在标识符 canary；要求响应中同时出现数据库/ORM 错误和该标识符，并复用两条已采集基线作恢复参照。通用 SQL 执行证据不能证明框架一定是 MyBatis，修复建议同样适用于字符串拼接或存储过程动态 SQL。
 
-### ORDER BY 专项（独立插件 `sqli_order_by`）
+堆叠规则只追加 `SELECT SLEEP(...)` / `SELECT pg_sleep(...)`，不读取业务数据、不添加 INSERT/UPDATE/DELETE/DROP。是否支持分号多语句与 Java 本身无必然关系：MySQL Connector/J 的 `allowMultiQueries` 默认 false；数据库、驱动方法、连接参数或代理均可能阻止。堆叠是深度中的补充检测，不作为所有接口的前置条件。ORDER BY 按行重复计算、数据库语句超时、函数权限不足和请求预算过小仍可能造成漏检；明显偏离单次设定时长的累积慢响应不会被此保守判定直接确认。
 
-仅扫描 `sort/sortBy/sortField/sortColumn/sortKey/order/orderBy/orderField/orderColumn/field/column/direction` 等可配置候选名。V2.4 先按参数名和值分类：
+### 调用、升级和规则维护
 
-- 值为 `ASC/DESC`，或名称为 `direction/sortOrder/*Direction`：按“排序方向”处理；
-- 其他候选：按“排序字段/表达式”处理。
-
-插件不会因为正常的 `ASC/DESC` 顺序变化就报警。字段上下文使用：
-
-```text
-正常：IF(731=731,{{value}},EXP(720))
-异常：IF(731=732,{{value}},EXP(720))
-```
-
-方向上下文保留原方向，并追加第二个受控排序表达式：
-
-```text
-正常：{{value}},IF(731=731,1,EXP(720))
-异常：{{value}},IF(731=732,1,EXP(720))
-```
-
-正常、异常、异常、正常按 A-B-B-A 发送。正常分支必须两次回到基线，异常分支必须两次命中同类数据库错误或稳定 5xx。MySQL 使用 IF/EXP 与 SLEEP；PostgreSQL/GaussDB 使用外层 `CAST(CASE...)` 条件错误对，降低常量折叠造成的误判。ORDER BY 可能按结果行重复计算表达式，因此该插件只属于 Deep/Custom，并受任务超时和请求预算限制。
-
-### LIMIT/OFFSET 专项（独立插件 `sqli_limit`）
-
-仅扫描 `limit/offset/pageSize/pageNo/page/start/startRow/rowStart/rowCount/size` 等可配置候选名。默认使用：
-
-```text
-破坏：{{value}}'-- 
-恢复：{{value}}-- 
-```
-
-按破坏、恢复、恢复、破坏发送。MySQL 使用上述引号/注释组；PostgreSQL/GaussDB 还使用保持分页值不变的 `CAST(CASE...)` 正常分支和稳定报错分支。两次恢复必须高度接近基线，两次破坏必须稳定触发同类数据库错误或统一 5xx。普通分页数量变化不构成证据；该插件不使用堆叠语句，也不修改数据。
-
-### 插件拆分与默认覆盖
-
-V2.4 的核心 `sqli` 对每个插入点先执行一层单引号筛选：
-
-- 发送一次优先级最高的单引号破坏请求；
-- 若出现基线中没有的数据库/JDBC/MyBatis 正则、HTTP 状态族变化、长业务响应明显变空，或归一化相似度不高于 `0.88`，才进入确认层；
-- 鉴权拒绝、406、429、基线稳定度低于 `0.75` 不作为筛选信号；
-- 筛选响应只用于适用性，不进入漏洞证据；确认层会重新原子发送完整 A-B-B-A。
-
-进入确认层后：
-
-- 单引号破坏/双单引号恢复按 break/repair/repair/break 独立发送 4 次；
-- 仅在上一组出现稳定恢复信号时，追加条件正常/条件错误/条件错误/条件正常共 4 次；
-- 原值可解析为数字时使用数值真假组；`query/search/keyword/filter/name/user/title/content` 等 MyBatis 常见模糊搜索参数使用 `LIKE '%输入%'` 边界适配组；其他参数使用普通字符串真假组，共 4 次；
-- 不执行时间延迟。
-
-请求计划会同时计入 1 条 Gate 和所有可能被发送或明确剪枝的请求槽位。Gate 干净时会剪枝单引号恢复及条件错误组，但仍执行一个上下文适配的布尔组；Gate 可疑时再按证据信号展开恢复和最多三种方言的有界条件组。一旦形成可靠证据立即停止当前点。该行为不因 Normal/Custom/Deep 改变。其余能力拆成：
-
-- `sqli_extended`：双引号标识符、双引号字符串布尔、括号/注释、PostgreSQL CAST、额外字符串/数值布尔组；
-- `sqli_timing`：PostgreSQL `pg_sleep(0/2)`、GaussDB 独立 `pg_sleep(0/2)` 与 MySQL 单引号/双引号 `SLEEP(0/2)`；
-- `sqli_order_by`：只扫描排序候选参数的条件错误和时间配对；
-- `sqli_limit`：只扫描分页候选参数的注释恢复/引号破坏配对。
-
-LIKE 包裹组默认使用：
-
-```text
-真：{{value}}%' AND '731'='731' AND '%'='
-假：{{value}}%' AND '731'='732' AND '%'='
-```
-
-当 Mapper 使用 `LIKE CONCAT('%', #{query}, '%')` 或等价字符串拼接时，尾部 `AND '%'='%'` 用于重新闭合框架追加的百分号和引号。仍需真、假、假、真两轮稳定差分，不会仅凭单次内容变化报告。
-
-实际请求数是计划上限而不是强制消耗量：某插入点一旦在当前 SQL 插件内获得可靠证据，就不再继续该插件的后续组。Normal 只勾选核心 `sqli`；Deep 勾选五个 SQL 插件；Custom 可以按需增加任一专项插件。
-
-错误正则覆盖 PSQLException、MySQL JDBC、GaussDB JDBC/内核/openGauss/GS 错误码、MyBatis/Spring 数据访问异常、CallableStatement/存储过程和通用 SQL 语法异常。GaussDB 官方确认支持 `pg_sleep(seconds)`，因此时间检测使用相同安全函数，但保留独立 group 与异常指纹。
-
-新增规则示例：
+只测 SQL 快速：
 
 ```json
-{
-  "name": "CTP 字符串布尔真",
-  "kind": "boolean_true",
-  "group": "ctp-string-comment",
-  "payload": "{{value}}' AND '731'='731'-- "
-}
+{"http":"GET /search?q=abc HTTP/1.1\r\nHost: test.local\r\n\r\n","scheme":"http","scan_type":["sqli"]}
 ```
 
-必须同时添加相同 group 的 `boolean_false`。V2.4 保存配置时会检查 SQL `kind`、非空 `group`、`{{value}}` 占位符和左右配对数量；同一 group 可以配置多对，按 JSON 数组顺序一一配对，数量不一致会拒绝保存。时间规则必须有同组 control，且 `expected` 必须大于 0、最多 10 秒。不要添加破坏数据的堆叠语句、DROP、UPDATE 或数据提取 Payload。
-
-## 5.9 MyBatis 动态 SQL 片段注入（`mybatis_dynamic_sql`）
-
-该插件只扫描排序列、方向、字段列表、表名和分组等语义参数。默认候选包括 `sort/order/orderBy/column/field/tableName/groupBy/direction/queryColumn`。
-
-向原值追加唯一不存在列 `jhs_invalid_column_731`；表名参数使用 `jhs_invalid_table_731`。V2.4 原子发送两次 canary 请求，不再为恢复步骤重复发送原始 POST。两次变异必须出现相同数据库/ORM 特征，并在响应中明确出现 canary；两条已采集原始基线不能有该特征且与代表性基线相似度至少 `0.86`，两次变异相似度至少 `0.90`。报告中的基线证据带 `reused_baseline:true`。
-
-配置示例：
+只测 SQL 深度：
 
 ```json
-{
-  "parameter_names": [
-    "sortField", "sortColumn", "orderByClause", "tableAlias", "selectFields"
-  ],
-  "payloads": [
-    {
-      "name": "追加不存在列",
-      "kind": "fragment_break",
-      "payload": "{{value}},jhs_invalid_column_731",
-      "expected": "jhs_invalid_column_731"
-    }
-  ]
-}
+{"http":"GET /search?q=abc HTTP/1.1\r\nHost: test.local\r\n\r\n","scheme":"http","scan_type":["sqli_deep"]}
 ```
 
-检测正则必须同时覆盖 canary 和目标系统真实异常包装。例如 CTP 重新包装异常时，应通过测试响应找出稳定类名或错误码后添加 Pattern。
+`scan_type:["deep"]` 是全扫描器的 Deep 预设，包含其他漏洞族；只排查 SQL 时用 `["sqli_deep"]`。同步 Full/Lite、V1/V2、异步 API 和 WEB 主动扫描共用这两个 ID。签名算法与客户端 TLS 仍是独立可选参数。
+
+建议初测选择快速，手工发现时间迹象或快速未检出时选择深度。默认网络超时 10 秒通常足以覆盖单次 3 秒探针；如目标基线本身很慢，应相应提高 `timeout_seconds`。默认全任务 `max_requests=500` 是所有选中插件共用预算，多参数深度扫描可能不够，按“计划请求数”和覆盖率调整。未检出不等于不存在漏洞；`partial`、`budget_skipped`、`mutation_failed` 必须与报告一起阅读。用例中的请求耗时不包含用户真实银行数据库压测，不能据此宣称生产检出率。
+
+配置版本升级到 32，保留旧规则桶及管理员自定义内容：`sqli` 供快速使用，`sqli_extended/sqli_timing/sqli_order_by/sqli_limit/mybatis_dynamic_sql` 供深度各子检测使用。这些旧桶不再表示五个可独立勾选的插件。升级旧 Normal 列表时将旧 `sqli_extended` 合并到快速，不默认开启时间探测；显式选择旧专项 ID 则兼容映射为深度。自定义 Normal 中显式包含旧时间/专项 ID 的，也映射为深度。
+
+新增时间规则要有同 group 的 control/delay 和正数 `expected`（最多 10 秒），当前双时长解析器支持字面量参数的 `SLEEP(n)` 和 `pg_sleep(n)`。其他延迟函数/表达式会被跳过，不应理解为已检测。精确替换规则的 group 以 `exact-replace` 结尾可省略 `{{value}}`，其他规则保留该占位符。报错正则可在 `sqli_error_patterns` 与各旧规则桶中维护，避免泛化 `error` 或 `500`。
+
+数据库语义参考：[PostgreSQL 逻辑运算](https://www.postgresql.org/docs/current/functions-logical.html)、[表达式求值顺序](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-EXPRESS-EVAL)、[MySQL Connector/J 配置](https://dev.mysql.com/doc/connector-j/en/connector-j-reference-configuration-properties.html)。
 
 ## 5.10 输入诱导异常信息泄露（`error_disclosure`）
 
@@ -785,119 +711,29 @@ expr {{left}} + {{right}}
 
 ## 5.16 XXE（`xxe`）
 
-**适用条件**：Content-Type 含 XML，或 Body 以 `<` 开始；必须能识别根节点和叶子/CDATA 节点。原报文已包含 DOCTYPE 时不二次注入，避免构造无效 XML。
+适用于 XML 正文和 CDATA 节点。V3.9 保证 XML 声明只保留一份，并替换选中的 CDATA 容器后插入实体。内部实体采用字符引用编码随机标记，避免仅反射请求原文就触发报警。内部实体展开为高危、较确定；Linux 文件实体或回连为高危、已确认。已有 DOCTYPE 的请求暂不追加第二个 DTD；不执行实体膨胀。
 
-插件对每个 XML 节点分别创建一条变体，只替换当前 occurrence，保留原 XML 声明、其他节点、命名空间、SOAP 包络和 CDATA，不再一次替换全部叶子。
-
-默认规则：
-
-- `inline`：内部实体展开，响应出现唯一 token，**高危、较确定**；
-- `file`：`file:///etc/passwd`，响应匹配 root 指纹，**严重、已确认**；
-- `callback`：位于 `xxe_extended`，使用 `callback_base_url`，收到唯一回连为**严重、已确认**。
-- `xinclude_file`：位于 `xxe_extended`，仅替换一个节点为 XInclude `file:///etc/passwd`，强指纹命中为**严重、已确认**。
-
-示例：
-
-```json
-{
-  "name": "内部实体",
-  "kind": "inline",
-  "payload": "<?xml version=\"1.0\"?><!DOCTYPE {{root}} [<!ENTITY jungle_happy_scan \"{{token}}\">]>",
-  "expected": "{{token}}"
-}
-```
-
-`expected` 是正则。主程序默认额外监听 `0.0.0.0:61166`，只开放一次性回连接口。`callback_base_url` 必须填写目标服务器能访问的扫描器地址，例如 `http://10.0.0.20:61166`；不依赖公网服务。
+回连在 `xxe_extended` 中，退出前统一结算已发送探针，支持持久配置的迟到补报窗口。
 
 ## 5.17 任意文件读取（`file_read`）
 
-只扫描 `parameter_names` 命中的参数。每个 Payload 的 `expected` 是文件内容强指纹正则。首次命中后会用同一 Payload 再请求一次；两次都命中且基线不命中才报告严重/已确认，避免把偶发错误页中的 `localhost`、`Linux` 等普通文字当作文件读取。
+候选来自配置参数名或参数值中的路径结构。目标文件仍为 Linux 的 passwd、hosts、proc/version、os-release；不包含 Windows 文件探针。响应指纹支持原始 Body、JSON 字符串和 Base64 包装。
 
-核心 `file_read` 默认规则：
+首次命中且基线不存在该指纹后，发送随机不存在路径；对照没有同一指纹时，再重复原始探针。三份证据共同支持确认，固定诊断页不会仅因重复命中而确认。自定义 expected 应使用完整行结构等强指纹。
 
-- `/etc/passwd`：目录穿越、绝对路径，匹配 root 账号记录；
-- `/etc/hosts`：目录穿越、绝对路径，匹配完整 loopback/localhost 行；
-- `/proc/version`：目录穿越、绝对路径，匹配 Linux 内核版本行；
-- `/etc/os-release`：目录穿越、绝对路径，同时匹配发行版名称与 ID。
-
-`file_read_encoded` 增加 passwd、hosts、proc/version 双重编码穿越、`....//` 非标准路径归一化和 `file:///etc/hosts` 变体。目标服务器统一为 Linux，不包含 Windows `win.ini` 或 Windows 路径规则。
-
-增加应用文件探测时，优先使用无敏感内容且稳定的系统文件，如：
-
-```json
-{
-  "name": "Linux hosts",
-  "payload": "../../../../../../etc/hosts",
-  "expected": "(?m)^\\s*127\\.0\\.0\\.1\\s+localhost\\b",
-  "mode": ""
-}
-```
-
-不要把 Expected 写成 `root`、`localhost`、`Linux` 这种过短字符串。新增系统文件时应同时配置该文件独有的行结构，并保留重复确认。
+`file_read_encoded` 保留双重编码、非标准归一化和 file URI 规则，使用同样的对照机制。
 
 ## 5.18 危险文件上传（`file_upload`）
 
-**适用条件**：Multipart 请求中存在文件 Part。
+枚举 Multipart 文件 Part。普通规则保留原内容，只变更文件名／MIME；兼容文件名式 field name 的旧 Servlet。业务失败和明确类型拒绝优先；正常上传基线已包含成功信息不会阻止再次判断危险类型的接受情况。单纯回显提交文件名或返回 path 不再证明成功。
 
-插件按照 `Content-Type` 中的 boundary 解析并重建标准 Multipart Part。普通危险后缀规则只替换文件名和 MIME，原文件内容逐字节保留，从而与 Burp 中“只改扩展名”的手工测试保持一致；只有独立的 `execute_canary` 无害执行确认规则会替换内容。其他文本字段和文件 Part 保持不变。它不接受拼错的 `Content-Disposition`。V2.1 会枚举并分别测试请求中的每一个文件 Part，不再只检查第一个文件字段；报告的 `affected`、`file_field`、`file_index` 和 `original_filename` 可定位实际被接受的字段。
-
-普通规则首先只改标准 `filename` 参数。若原始 `name` 自身也形如文件名（例如 `name="020079103915427_0.jpg"`），且标准探针未形成证据，插件会额外执行一次兼容探针，同时把 `name` 和 `filename` 改为相同危险文件名，用于兼容错误地以 field name 判断扩展名的旧 Servlet。响应应满足以下之一：
-
-- 匹配 `expected`；
-- 响应包含文件名；
-- 响应新增 `filename/文件名` 字段，并且服务端重命名后的文件仍保留本次测试的危险后缀；
-- `execute_canary` 或文件名模板确实发送了随机 token，并且响应包含该 token。
-
-`UploadFileTypeNot`、文件类型不允许/不支持等拒绝特征会覆盖宽泛的 HTTP 200 或成功文本。`expected` 还必须是相对原始基线新增的信号，避免接口原本就返回 `code=200` 导致误报。仅命中宽泛成功正则时为**中危、待确认**；响应明确返回原文件名、相同危险后缀的服务端重命名文件、canary 或同源路径时提升为**高危、较确定**。重命名证据兼容 `filename：“xxx.jspx”`、普通 JSON、被转义后嵌在字符串中的 JSON，以及旧 CTP/Servlet 文本包装；必须在 `filename/new_filename/saved_filename/文件名` 标签附近出现本次测试的精确危险后缀。若旧 Servlet 已保存文件但随后由统一异常包装成 HTTP 500，该强重命名证据仍可成立；401、403、406、429 和明确拒绝文本始终不会报警。若上传响应提供同源相对 `Location` 或 JSON `url/path/location/downloadUrl`，插件会读取该地址；能读到 canary 时为**高危、已确认**。
-
-`file_upload_execution` 使用 `kind: "execute_canary"`：上传仅含随机整数乘法的 JSP。乘积不存在于上传源码；只有访问同源路径后出现正确乘积，且没有返回 `<%=` 源码，才报告**严重、已确认（L5）**。它不执行命令、不读文件、不出网。
-
-规则示例：
-
-```json
-{
-  "name": "JSP 文件",
-  "payload": "jungle-happy-scan-canary.jsp",
-  "mime": "application/octet-stream",
-  "expected": "(?i)(上传成功|保存成功|\"code\"\\s*:\\s*\"?000000)"
-}
-```
-
-核心插件默认测试 `.jsp`、`.jspx`、`.php`、`.exe`、`.sh`、`.html` 和 `.py`；`file_upload_execution` 包含双扩展 JSP 和 JSP 无害算术执行确认。可根据目标白名单补充 `.war`、模板文件或其他危险业务扩展名，但不应在文件内容中配置命令、文件读取或网络操作。
-
-本次 V2.1 修复将内部配置结构升级到 19：服务器第一次使用新二进制启动时，会在保留管理员自定义规则的前提下，把缺失的默认 `.jspx` 探针补回持久配置。之后管理员仍可在【持久配置】中自行删除、增加或修改规则。
+业务接受为中危、待确认；新出现的服务端重命名危险后缀为高危、较确定。若同源读取与原文件字节完全一致，记录 SHA-256 并报告高危、已确认。`file_upload_execution` 的随机算术 JSP 只有回读得到正确乘积且不是源码，才报告严重、已确认。最终定级不再被覆盖为低危。
 
 ## 5.19 SSRF（`ssrf`）
 
-只扫描 URL 类 `parameter_names`，且必须设置 `callback_base_url`。默认名称包含 `domain`，因此可匹配 `cmcDomain` 等以后缀命名的字段。每个请求注册唯一 token，Payload 用 `{{callback}}` 生成 URL。
+按 URL 参数名选择输入点，使用 `callback_base_url` 注册唯一 token。独立回连或专属响应标记证明服务端访问了外部 URL，默认中危、已确认；不据此推断私网访问或严重影响，合法 webhook 需按业务范围复核。
 
-- 收到独立一次性回连：**严重、已确认**，证据等级 L5；
-- 目标读取回连响应并把专属响应标记带回原始业务响应：**严重、已确认**，证据等级 L5；
-- 未收到回连：不报告。响应仅回显 callback URL、Token 或整个 Payload 不构成 SSRF 证据，也不会被提升为 L5。
-
-配置示例：
-
-```json
-{
-  "callback_base_url": "http://10.0.0.20:61166",
-  "plugin_rules": {
-    "ssrf": {
-      "parameter_names": ["url", "domain", "webhookUrl", "downloadAddress", "imageUrl"],
-      "payloads": [
-        {"name": "内网回连", "payload": "{{callback}}"}
-      ]
-    }
-  }
-}
-```
-
-程序启动时默认同时打开 61166 回连端口，回连路径由扫描器自动生成。V3.4支持GET、HEAD以及最大64 KiB的POST回连，并能从Token后的追加业务路径或Query中识别已注册Token。例如目标将固定路径追加为：
-
-```http
-POST /api/v1/callback/<token>/openapi/v1/envs/apps/1 HTTP/1.1
-```
-
-仍可正确关联。回连响应还包含一个不出现在注入URL中的专属标记；只有目标真正读取该响应并将标记回显到原始接口响应时，才使用“直接回显”证据确认SSRF。该端口不暴露扫描或配置 API。默认不会探测云元数据、环回端口或真实内网资产。
+发送失败、超时或预算退出时仍结算之前的候选。`callback_wait_seconds` 控制同步等待；`callback_late_seconds` 控制任务保留期间的迟到补报，0 关闭。前台会继续更新待观察结果；重启、取消或删除任务后不再关联。仅反射 URL 不构成证据。
 
 ## 5.20 开放重定向（`open_redirect`）
 
@@ -944,33 +780,20 @@ https://jungle-happy-scan.invalid/{{token}}
 
 ## 5.22 反射型 XSS（`reflected_xss`）
 
-仅对 GET/POST/PUT/PATCH 执行，两阶段检测：
+先用唯一标记定位每个反射上下文，再逐位置测试配置 payload。安全编码副本不否定其他位置的原始反射；测试响应再次检查 HTML MIME。支持属性、脚本字符串、脚本注释以及注释、textarea/title/style 等结束标签闭合；HTML 属性中的反斜杠不会被当成引号转义。
 
-1. 注入唯一 token，确认它在 HTML/JSP 响应中反射；JSON/XML Content-Type 直接跳过，无 Content-Type 时仅对具有 HTML 文档特征的响应继续。
-2. 检查 token 的全部反射位置，过滤 HTML 注释、`style/textarea/title/xmp/noembed/noframes` 等不可执行文本容器。
-3. 区分 `html-text`、`tag`、双引号/单引号/无引号属性，以及 JavaScript 单引号、双引号、模板字符串和代码上下文，选择对应 kind 的 Payload。
-
-只有完整 Payload 原样出现在响应，且没有以 HTML 编码形式出现，才报告高危/较确定。V1.4 不启动浏览器验证 JavaScript 执行，因此不会声称已执行脚本。
-
-规则：
-
-```json
-{
-  "name": "单引号属性上下文",
-  "kind": "attribute-single",
-  "payload": "{{token}}'><svg/onload=confirm(\"{{token}}\")>"
-}
-```
-
-可配置的精确 kind 为 `attribute-double`、`attribute-single`、`attribute-unquoted`、`script-single`、`script-double`、`script-template`、`script-code`、`tag` 和 `html-text`。旧的 `attribute`、`script` 规则继续作为同类上下文回退项。只有完整 Payload 原样出现在同一可执行上下文，且没有被 HTML 编码时才报告；增加规则时保持唯一 token，不使用出网脚本。
+报告低危、较确定的原始反射候选，不声称浏览器执行。尚未增加 DOM／存储型 XSS 或浏览器执行复核。
 
 ## 5.23 敏感信息泄露（`sensitive_data`）
 
-被动扫描基线响应的状态行、Header 和 Body 文本。每个 Detection Rule 最多生成一个 Finding，避免同类信息刷屏。
+敏感规则保持自定义名称、正则及风险等级。validator 可为 cn_id、luhn、ip、none；历史标准名称自动迁移到稳定 validator，改显示名不会失去校验。
 
+<<<<<<< HEAD
+每类给出匹配次数与最多五个不同样本，最多统计一万次原始匹配并注明截断。选中该插件时也分析主动探针响应，排除基线已有及请求直接反射的内容。格式命中不证明越权或违反业务公开范围。
+=======
 默认检测：
 
-- Java 异常堆栈、SQL 语句、数据库连接串、绝对路径；
+- `flag{...}` Flag 标记（内容可以为空、包含中文、换行或其他字符）、Java 异常堆栈、SQL 语句、数据库连接串、绝对路径；
 - 私钥和 JWT；
 - 中国手机号、身份证、银行卡、邮箱、IP；
 - Kubernetes kubeconfig、Secret 清单、ServiceAccount 环境/路径；
@@ -979,8 +802,8 @@ https://jungle-happy-scan.invalid/{{token}}
 
 额外有效性校验：
 
-- 身份证：出生日期与 18 位校验码；
-- 银行卡：Luhn；
+- 身份证：1900–2030 年范围、合法出生日期与 18 位校验码；
+- 银行卡：国内常见 BIN 头、16–19 位长度、非全重复数字与 Luhn；
 - IP：标准 IP 解析。
 
 证据保留命中上下文原文，不执行脱敏；Java 栈和 SQL 只保留至多 160 字符。
@@ -997,6 +820,7 @@ https://jungle-happy-scan.invalid/{{token}}
 ```
 
 Pattern 有捕获组时证据优先取第一个非空捕获组。请避免把普通 `token` 字样或所有邮箱都当成高危；严重性应结合数据类型。
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 
 ## 5.24 JWT 弱配置（`jwt_weak`）
 
@@ -1201,53 +1025,11 @@ jungle.happy.scan.SafeModeProbe731
 
 ## 5.32 短信轰炸/喷洒（`sms_abuse`）
 
-**适用条件**：请求 URL 必须包含持久规则 `sms_abuse.url_keywords` 中的任一关键字，默认是 `send`；同时发现手机号语义参数。管理员可在持久配置中新增 `message` 等厂内路由关键字。这样包含 `phone` 的普通 `update` 接口不会被当作短信接口。命中 URL 条件后不再硬编码限制 HTTP Method；GET Query、POST/PUT/PATCH 的 Form、JSON、嵌套 JSON 等只要发现匹配字段都可执行。默认参数名称包括 `mobile`、`mobileNo`、`mobilePhone`、`phone`、`phoneNumber`、`telephone`、`tel`、`smsPhone`、`receiverMobile`。
+URL 必须匹配插件 url_keywords，且参数名符合手机号语义。已有自定义路由关键词继续沿用。
 
-### 短信轰炸
+同号码请求数、成功次数阈值和观察窗口在前台响应语义中配置，默认 30／5／60 秒。仅明确业务成功计数，失败优先，未知不计入；仍不声称真实短信到达。喷洒只使用配置的 spray_number 号码池，不隐式补足，空池关闭喷洒。
 
-插件为原号码生成 30 个相同请求，先创建全部 goroutine，再通过同一个 start channel 同步释放，确保它是高并发批次而不是串行 Payload 循环。实际在途连接仍受 `max_concurrency` 和 `requests_per_second` 的安全上限约束。只有同时满足以下条件才报告：
-
-- 成功响应超过 5 次；
-- 从同步释放到批次完成不超过一分钟；
-- 成功响应为 2xx 且不是认证拒绝；
-- JSON 结构明确包含 `code/status/resultCode/retCode` 为 `0`、`200`、`000000`，或 `success=true`，或消息字段包含“发送成功/下发成功”；也可由 `sms_abuse.patterns` 或全局 `success_patterns` 补充判定。
-
-例如下面的数字型 `code` 会直接计入成功，不依赖持久正则是否覆盖：
-
-```json
-{"msg":"发送成功", "code":200}
-```
-
-结果名称为“短信接口缺少单号码发送频率限制”。扫描器无法观察运营商或手机，只能证明接口在一分钟内超过 5 次返回“发送成功”。
-
-### 短信喷洒
-
-`kind: spray_number` 的规则生成不同号码，所有变异请求同样通过同步屏障并发发送。只有一分钟内超过 5 个不同号码均返回成功时才报告。
-
-默认使用原号码除最后 4 位之外的前缀，并生成 30 个不同测试尾号。管理员自定义不足 30 条时，扫描器会自动补足为 30 个不同号码：
-
-```json
-{
-  "parameter_names": ["mobile", "phoneNumber", "receiverMobile"],
-  "payloads": [
-    {"name": "喷洒号码 1", "kind": "spray_number", "payload": "{{prefix}}7300"},
-    {"name": "喷洒号码 2", "kind": "spray_number", "payload": "{{prefix}}7301"},
-    {"name": "喷洒号码 30", "kind": "spray_number", "payload": "{{prefix}}7329"}
-  ],
-  "patterns": [
-    {
-      "name": "短信发送成功",
-      "pattern": "(?is)(短信.{0,20}发送.{0,20}成功|验证码.{0,20}发送.{0,20}成功|\"(?:code|status)\"\\s*:\\s*\"?(?:0|200|000000)\"?)",
-      "severity": "高危",
-      "confidence": "较确定"
-    }
-  ]
-}
-```
-
-测试前应把喷洒号码改为测试环境保留号码，并把成功正则收紧到目标系统真实 success code/message。该插件会真实调用接口，只能在明确授权的测试环境使用。
-
----
+请求受全局及目标并发／RPS 管理。证据记录实际发送偏移；窗口不足、未形成请求重叠或测试号码不足会展示覆盖不完整。详细规则 JSON 示例见 V3.9.0 发布说明。
 
 ## 5.33 Apache Shiro RememberMe（`shiro`）
 

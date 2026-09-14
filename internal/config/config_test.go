@@ -16,6 +16,21 @@ func TestDefaultDisablesTLSVerificationForIntranetTargets(t *testing.T) {
 	}
 }
 
+func TestUnauthorizedAllowPathsValidate(t *testing.T) {
+	cfg := Default()
+	rule := cfg.PluginRules["unauthorized"]
+	rule.AllowPaths = []string{"/login", "/checkHealth"}
+	cfg.PluginRules["unauthorized"] = rule
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid unauthorized allow paths were rejected: %v", err)
+	}
+	rule.AllowPaths = []string{"/"}
+	cfg.PluginRules["unauthorized"] = rule
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("relative unauthorized allow path was accepted")
+	}
+}
+
 func TestDefaultLinuxFileReadFingerprints(t *testing.T) {
 	samples := map[string]string{
 		"passwd 绝对路径":       "root:x:0:0:root:/root:/bin/sh\n",
@@ -101,7 +116,7 @@ func TestV30UpgradeRestoresExactMySQLAndSelectTimingPair(t *testing.T) {
 		t.Fatal(err)
 	}
 	upgraded := store.Get()
-	if upgraded.ConfigVersion != currentConfigVersion || len(upgraded.NormalPlugins) != 1 || upgraded.NormalPlugins[0] != "sqli_timing" {
+	if upgraded.ConfigVersion != currentConfigVersion || len(upgraded.NormalPlugins) != 1 || upgraded.NormalPlugins[0] != "sqli_deep" {
 		t.Fatalf("V30 upgrade changed configured normal plugins: %#v", upgraded.NormalPlugins)
 	}
 	found := 0

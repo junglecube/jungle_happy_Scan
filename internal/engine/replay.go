@@ -15,6 +15,7 @@ import (
 	"jungle_happy_Scan/internal/clientcert"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
+	"jungle_happy_Scan/internal/signing"
 	"jungle_happy_Scan/internal/transport"
 )
 
@@ -214,7 +215,11 @@ func (m *Manager) RunReplayVariants(
 	if err != nil {
 		return err
 	}
-	client, err := transport.NewWithGovernorAndCertificate(cfg, transport.Hooks{}, m.governor, certificate)
+	signer, err := signing.New(input.Signature)
+	if err != nil {
+		return err
+	}
+	client, err := transport.NewWithGovernorAndCertificateAndSigner(cfg, transport.Hooks{}, m.governor, certificate, signer)
 	if err != nil {
 		return err
 	}

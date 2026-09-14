@@ -1,7 +1,10 @@
 package plugin
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"jungle_happy_Scan/internal/diff"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -114,8 +117,7 @@ func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error
 			if contentReplaced {
 				description = "服务端对无害执行确认文件返回了配置的上传成功证据；后续仍需同源读取验证。"
 			}
-			if renamedAccepted || strings.Contains(response.Text(), filename) ||
-				tokenWasSent && strings.Contains(response.Text(), token) || uploadedResourcePath(response) != "" {
+			if renamedAccepted {
 				confidenceValue = model.ConfidenceFirm
 				severityValue = model.SeverityHigh
 			}
@@ -141,16 +143,21 @@ func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error
 					description += " 同源访问只返回了请求中不存在的随机算术结果，且未返回 JSP 源码，已确认 JSP 被服务端执行。"
 					evidence = append(evidence, ctx.Evidence("同源访问确认 JSP 无害算术执行", verify, &verifyResponse, map[string]any{"uploaded_path": uploadedPath, "expected": executionExpected, "confirmed_execution": true, "evidence_strength": "L5"}))
 				} else if verifyErr == nil && verifyResponse.StatusCode >= 200 && verifyResponse.StatusCode < 300 &&
-					tokenWasSent && strings.Contains(verifyResponse.Text(), token) {
+					!contentReplaced && len(file.Content) > 0 && bytes.Equal(verifyResponse.Body, file.Content) {
 					confidenceValue = model.ConfidenceCertain
 					severityValue = model.SeverityHigh
-					description += " 上传响应给出的同源地址可再次读取唯一 canary，已确认文件实际落地并可访问。"
-					evidence = append(evidence, ctx.Evidence("同源读取上传资源命中唯一 canary", verify, &verifyResponse, map[string]any{"uploaded_path": uploadedPath}))
+					description += " 上传响应给出的同源地址可再次读取与原文件完全一致的内容，已确认文件可访问；不代表服务器执行。"
+					evidence = append(evidence, ctx.Evidence("同源读取上传资源匹配原文件摘要", verify, &verifyResponse, map[string]any{"uploaded_path": uploadedPath, "sha256": fmt.Sprintf("%x", sha256.Sum256(file.Content))}))
 				}
 			}
 			affected := fmt.Sprintf("body:multipart:%s[%d]", defaultString(file.FieldName, "file"), file.Index)
-			severityValue = model.SeverityLow
-			findings = append(findings, Finding(meta, fmt.Sprintf("服务端接受危险文件类型 %s", filename), severityValue, confidenceValue,
+			title := fmt.Sprintf("服务端接受危险文件类型 %s", filename)
+			if severityValue == model.SeverityCritical {
+				title = "上传文件被服务端执行：" + filename
+			} else if confidenceValue == model.ConfidenceCertain {
+				title = "上传文件可访问：" + filename
+			}
+			findings = append(findings, Finding(meta, title, severityValue, confidenceValue,
 				affected, description,
 				"使用扩展名、MIME 和文件特征白名单；服务端随机重命名；保存到 Web 根目录外，并禁止上传目录脚本执行。",
 				evidence,
@@ -161,7 +168,15 @@ func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error
 }
 
 func uploadAccepted(ctx *Context, response model.Response, filename, token string, tokenWasSent bool, expected *regexp.Regexp) (string, bool, bool) {
-	expectedChanged := expected != nil && expected.Match(response.Body) && !expected.Match(ctx.Baseline.Body)
+	businessResponse := response
+	if response.StatusCode == 500 {
+		businessResponse.StatusCode = 200
+	}
+	outcome := diff.EvaluateBusiness(businessResponse, ctx.Config, metaUploadID(ctx), ctx.Request.Target)
+	if outcome.Outcome == diff.Failure {
+		return "", false, false
+	}
+	expectedChanged := outcome.Outcome == diff.Success || expected != nil && expected.Match(response.Body)
 	renamedEvidence, renamedAccepted := renamedDangerousUpload(response, ctx.Baseline, filename)
 	rejected := uploadRejectionPattern.Match(response.Body)
 	statusAccepted := response.StatusCode >= 200 && response.StatusCode < 300
@@ -174,8 +189,7 @@ func uploadAccepted(ctx *Context, response model.Response, filename, token strin
 		statusAccepted = true
 	}
 	accepted := statusAccepted && !rejected &&
-		(expectedChanged || renamedAccepted || strings.Contains(response.Text(), filename) ||
-			(tokenWasSent && strings.Contains(response.Text(), token)) || uploadedResourcePath(response) != "")
+		(expectedChanged || renamedAccepted)
 	return renamedEvidence, renamedAccepted, accepted
 }
 
@@ -199,7 +213,7 @@ func renamedDangerousUpload(response, baseline model.Response, submitted string)
 		return "", false
 	}
 	match := renamedFilenameEvidence(response.Body, extension)
-	if match == "" || renamedFilenameEvidence(baseline.Body, extension) != "" {
+	if match == "" || strings.Contains(match, submitted) || renamedFilenameEvidence(baseline.Body, extension) != "" {
 		return "", false
 	}
 	return match, true
@@ -238,10 +252,17 @@ func uploadedResourcePath(response model.Response) string {
 	}
 	for _, candidate := range candidates {
 		parsed, err := url.Parse(strings.TrimSpace(candidate))
-		if err != nil || candidate == "" || parsed.IsAbs() || !strings.HasPrefix(parsed.Path, "/") {
+		if err != nil || candidate == "" || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
 			continue
 		}
 		return parsed.RequestURI()
 	}
 	return ""
+}
+
+func metaUploadID(ctx *Context) string {
+	if ctx.ActivePluginID != "" {
+		return ctx.ActivePluginID
+	}
+	return "file_upload"
 }

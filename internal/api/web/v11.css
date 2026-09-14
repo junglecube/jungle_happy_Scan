@@ -373,6 +373,7 @@ body {
 .client-tls-row{display:flex;align-items:center;gap:9px;margin-top:12px;padding:10px 12px;border:1px solid #dce5df;border-radius:10px;background:#f8fbf9;min-height:52px}
 .client-tls-label{margin-right:auto;min-width:190px}.client-tls-label strong,.client-tls-label small{display:block}.client-tls-label strong{font-size:12px}.client-tls-label small{margin-top:3px;color:#66736d;font-size:10px;line-height:1.4}
 .client-tls-upload{border:1px solid #b9d1c2!important;border-radius:8px!important;background:#fff!important;padding:7px 10px!important}.client-tls-name{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#526159;font-size:10px}
+.signature-row select,.signature-endpoint{border:1px solid #b9d1c2;border-radius:8px;background:#fff;color:#33453b;padding:7px 9px;font-size:11px}.signature-endpoint{width:240px}
 .client-tls-password{width:170px;border:1px solid #dce5df;border-radius:8px;padding:7px 9px;background:#fff;font-size:10px}
 @media(max-width:680px){.client-tls-row{align-items:stretch;flex-direction:column}.client-tls-label{margin-right:0}.client-tls-name,.client-tls-password{max-width:none;width:100%}}
 .connectivity-result #connectivity-response {
@@ -447,6 +448,56 @@ body {
 .rule-textarea:focus { border-color: #72a787; box-shadow: 0 0 0 3px rgba(24,115,74,.08); }
 .card-help code { padding: 2px 5px; border-radius: 4px; background: var(--amber-soft); color: #704b04; }
 
+<<<<<<< HEAD
+/* Persistent settings: one readable card per row on the desktop layout. */
+.settings-grid { grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.settings-grid > .settings-card:not(.full-card) { grid-column: 1 / -1; min-width: 0; padding: 18px; }
+.settings-card { padding: 20px; border-color: #d9e4dc; background: rgba(255,255,255,.98); }
+=======
+/* Persistent settings: keep cards aligned and make dense rule editing easier
+   to scan without changing the underlying configuration model. */
+.settings-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.settings-grid > .settings-card:not(.full-card) { grid-column: span 6; min-width: 0; }
+.settings-card { padding: 24px; border-color: #d9e4dc; background: rgba(255,255,255,.98); }
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+.settings-card .panel-heading { margin-bottom: 15px; padding-bottom: 13px; border-bottom: 1px solid #e7eee9; }
+.settings-card .panel-heading h2 { letter-spacing: .1px; }
+.settings-card .card-help { max-width: 92ch; line-height: 1.65; }
+.form-grid, .rule-grid { gap: 16px; align-items: start; }
+.form-grid label, .rule-grid label { min-width: 0; }
+.rule-grid label { display: flex; flex-direction: column; }
+.rule-grid label small { margin-top: 7px; color: var(--muted); font-size: 10px; font-weight: 500; line-height: 1.55; }
+.rule-allowlist-field { padding: 13px 14px; border: 1px solid #cfe2d4; border-radius: 11px; background: #f4faf5; }
+.rule-allowlist-field textarea { background: #fff; }
+.rule-toolbar { margin: 15px 0 18px; }
+.rule-grid .rule-textarea { min-height: 92px; }
+.rule-grid .json-editor { min-height: 290px; }
+
+<<<<<<< HEAD
+.business-keyword-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.business-keyword { display: flex; flex-direction: column; gap: 6px; padding: 13px; border: 1px solid #d9e4dc; border-radius: 11px; }
+.business-keyword > span { font-weight: 800; }
+.business-keyword > small { color: var(--muted); line-height: 1.45; }
+.success-keywords { border-color: #b8d9c1; background: #f3faf4; }
+.success-keywords > span { color: #247346; }
+.failure-keywords { border-color: #e4c2bd; background: #fff7f5; }
+.failure-keywords > span { color: #a24d43; }
+.business-keyword textarea { min-height: 112px; background: rgba(255,255,255,.9); }
+
+@media(max-width:1000px){
+  .settings-grid { grid-template-columns: 1fr; }
+  .settings-grid > .settings-card:not(.full-card) { grid-column: 1 / -1; }
+}
+
+@media(max-width:650px){ .business-keyword-grid { grid-template-columns: 1fr; } }
+
+=======
+@media(max-width:1000px){
+  .settings-grid { grid-template-columns: 1fr; }
+  .settings-grid > .settings-card:not(.full-card) { grid-column: auto; }
+}
+
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 .evidence-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 9px; }
 .evidence-block { min-width: 0; }
 .evidence-label { display: block; margin-bottom: 5px; color: #6f8177; font-size: 9px; font-weight: 850; letter-spacing: .8px; }
@@ -840,3 +891,32 @@ body {
   .guide-toc { position: static; max-height: 260px; }
   .markdown-body { padding: 23px 18px 35px; }
 }
+
+/* Public settings followed by grouped plugin configuration cards. */
+.settings-section-heading { margin: 12px 0 20px; }
+.settings-section-heading h2 { margin: 0 0 8px; }
+.settings-section-heading p { color: var(--muted); margin: 0; }
+.settings-plugin-area { margin-top: 30px; }
+.config-plugin-picker { display: grid; gap: 16px; margin: 22px 0; }
+.config-plugin-group { --config-tone: #367757; --config-bg: #f1f8f3; border-left: 3px solid var(--config-tone); padding: 12px 16px; background: var(--config-bg); border-radius: 10px; }
+.config-plugin-group h3 { margin: 0 0 10px; font-size: 14px; color: var(--config-tone); }
+.config-plugin-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.config-plugin-entry { min-width: 0; display: block; }
+.config-plugin-entry.expanded { display: block; }
+.config-plugin-entry.expanded .config-plugin-card { width: 100%; }
+.config-plugin-entry.expanded #config-plugin-detail { margin-top: 10px; }
+.config-plugin-card { width: 100%; text-align: left; background: white; cursor: pointer; font: inherit; }
+.config-plugin-card[aria-pressed="true"] { border-color: var(--config-tone); box-shadow: inset 0 0 0 1px var(--config-tone); background: var(--config-bg); }
+.config-plugin-card[aria-pressed="true"] strong::after { content: ' · 当前'; color: var(--config-tone); }
+.config-plugin-card:focus-visible { outline: 3px solid var(--config-tone); outline-offset: 2px; }
+.tone-0 { --config-tone:#386aa2; --config-bg:#f0f5fc; }
+.tone-1 { --config-tone:#946627; --config-bg:#fcf7ee; }
+.tone-2 { --config-tone:#7558a0; --config-bg:#f7f3fc; }
+.tone-3 { --config-tone:#a14e63; --config-bg:#fcf2f5; }
+.tone-4 { --config-tone:#287c83; --config-bg:#eff9f9; }
+.tone-5 { --config-tone:#586b91; --config-bg:#f2f5fa; }
+#config-plugin-detail { border-top: 1px solid #d9e4dc; padding: 16px; border-radius: 10px; background: rgba(255,255,255,.72); }
+#config-plugin-detail .rule-toolbar { justify-content: space-between; }
+#settings-form [hidden] { display:none !important; }
+@media(max-width:1000px) { .config-plugin-grid { grid-template-columns:1fr; } }
+@media(max-width:560px) { .config-plugin-grid { grid-template-columns:1fr; } .config-plugin-group { padding:12px; } }

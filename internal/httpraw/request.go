@@ -340,6 +340,7 @@ func (r *Request) FirstMultipartFile() (filename string, ok bool) {
 }
 
 type MultipartFile struct {
+	Content     []byte `json:"-"`
 	Index       int    `json:"index"`
 	FieldName   string `json:"field_name"`
 	Filename    string `json:"filename"`
@@ -365,8 +366,12 @@ func (r *Request) MultipartFiles() []MultipartFile {
 			return nil
 		}
 		if part.FileName() != "" {
+			content, readErr := io.ReadAll(part)
+			if readErr != nil {
+				return nil
+			}
 			files = append(files, MultipartFile{
-				Index: len(files), FieldName: part.FormName(), Filename: part.FileName(),
+				Content: content, Index: len(files), FieldName: part.FormName(), Filename: part.FileName(),
 				ContentType: part.Header.Get("Content-Type"),
 			})
 		}

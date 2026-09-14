@@ -42,6 +42,7 @@ type Server struct {
 	scanRates      map[string]scanRateWindow
 	rateLastSweep  time.Time
 	clientTLSDir   string
+	signatureDir   string
 	webScans       *webscan.Manager
 	replayMu       sync.RWMutex
 	replays        map[string]*replayTask
@@ -66,10 +67,14 @@ func New(store *config.Store, manager *engine.Manager, logger *slog.Logger) (*Se
 	if err != nil {
 		return nil, fmt.Errorf("解析客户端证书目录失败: %w", err)
 	}
+	signatureDir, err := filepath.Abs(filepath.Join(filepath.Dir(store.Path()), "signature_scripts"))
+	if err != nil {
+		return nil, fmt.Errorf("解析签名脚本目录失败: %w", err)
+	}
 	server := &Server{
 		store: store, manager: manager, static: static, logger: logger,
 		configPassword: []byte(password), scanRates: make(map[string]scanRateWindow), rateLastSweep: time.Now(),
-		clientTLSDir: clientTLSDir, replays: make(map[string]*replayTask),
+		clientTLSDir: clientTLSDir, signatureDir: signatureDir, replays: make(map[string]*replayTask),
 	}
 	stateBase := filepath.Dir(store.Path())
 	if filepath.Base(stateBase) == "config" {
@@ -99,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/replays", s.replayCollection)
 	mux.HandleFunc("/api/v1/replays/", s.replayRoute)
 	mux.HandleFunc("POST /api/v1/client-tls-files", s.uploadClientTLSFile)
+	mux.HandleFunc("POST /api/v1/signature-files", s.uploadSignatureFile)
 	mux.HandleFunc("GET /api/v3/proxy-ca", s.proxyCACertificate)
 	mux.HandleFunc("POST /api/v1/scan", s.createScan)
 	mux.HandleFunc("POST /api/v1/scans", s.createScan)
@@ -464,6 +470,67 @@ func (s *Server) uploadClientTLSFile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) uploadSignatureFile(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2_200_000)
+	if err := r.ParseMultipartForm(2_200_000); err != nil {
+		writeError(w, http.StatusBadRequest, "签名脚本上传失败或超过 2 MiB")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "缺少名为 file 的签名脚本")
+		return
+	}
+	defer file.Close()
+	if strings.ToLower(filepath.Ext(header.Filename)) != ".js" {
+		writeError(w, http.StatusBadRequest, "签名脚本仅支持 .js 文件")
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(file, 2_000_001))
+	if err != nil || len(data) == 0 || len(data) > 2_000_000 {
+		writeError(w, http.StatusBadRequest, "签名脚本大小必须在 1 字节到 2 MiB 之间")
+		return
+	}
+	defer clear(data)
+	if err := os.MkdirAll(s.signatureDir, 0o700); err != nil {
+		writeError(w, http.StatusInternalServerError, "无法创建签名脚本目录")
+		return
+	}
+	originalName := filepath.Base(header.Filename)
+	if originalName == "." || originalName == string(filepath.Separator) || originalName == "" ||
+		strings.ContainsAny(originalName, "\r\n\x00") {
+		writeError(w, http.StatusBadRequest, "签名脚本文件名无效")
+		return
+	}
+	target := filepath.Join(s.signatureDir, originalName)
+	handle, err := os.CreateTemp(s.signatureDir, ".signature-upload-*")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "无法保存签名脚本")
+		return
+	}
+	tempName := handle.Name()
+	defer os.Remove(tempName)
+	if err = handle.Chmod(0o600); err != nil {
+		_ = handle.Close()
+		writeError(w, http.StatusInternalServerError, "无法设置签名脚本权限")
+		return
+	}
+	if _, err = handle.Write(data); err == nil {
+		err = handle.Sync()
+	}
+	closeErr := handle.Close()
+	if err != nil || closeErr != nil {
+		writeError(w, http.StatusInternalServerError, "无法完整保存签名脚本")
+		return
+	}
+	if err := os.Rename(tempName, target); err != nil {
+		writeError(w, http.StatusInternalServerError, "无法替换签名脚本")
+		return
+	}
+	s.logger.Info("signature script uploaded", "file", target, "size", len(data))
+	writeJSON(w, http.StatusCreated, map[string]any{"signature_script": target, "filename": originalName})
+}
+
 // CallbackHandler exposes only the one-time callback endpoint on the dedicated
 // listener. Scanner management and scan creation APIs remain on the main port.
 func (s *Server) CallbackHandler() http.Handler {
@@ -504,7 +571,7 @@ func (s *Server) plugins(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) pluginsV2(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "rule_pack_version": "2.4.0", "rule_pack_digest": s.rulePackDigest(), "plugins": plugin.Metadata()})
+	writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "rule_pack_version": "3.8.3", "rule_pack_digest": s.rulePackDigest(), "plugins": plugin.Metadata()})
 }
 
 func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
@@ -851,7 +918,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
-			result["rule_pack_version"] = "2.4.0"
+			result["rule_pack_version"] = "3.8.3"
 			result["rule_pack_digest"] = s.rulePackDigest()
 			result["findings"] = []v2Finding{}
 		}
@@ -873,7 +940,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
-			result["rule_pack_version"] = "2.4.0"
+			result["rule_pack_version"] = "3.8.3"
 			result["rule_pack_digest"] = s.rulePackDigest()
 			result["findings"] = []v2Finding{}
 		}
@@ -909,7 +976,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	}
 	if apiV2 {
 		result["api_version"] = "2.0"
-		result["rule_pack_version"] = "2.4.0"
+		result["rule_pack_version"] = "3.8.3"
 		result["rule_pack_digest"] = s.rulePackDigest()
 		result["findings"] = convertV2Findings(findings, lite)
 	}
@@ -1085,14 +1152,15 @@ func liteFindings(findings []model.Finding) []model.Finding {
 }
 
 type jungleHappyScanInput struct {
-	HTTP              string            `json:"http"`
-	HTTPBase64        string            `json:"http_base64"`
-	Response          string            `json:"response"`
-	ScanType          []string          `json:"scan_type"`
-	Scheme            string            `json:"scheme"`
-	Host              map[string]string `json:"host"`
-	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
-	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
+	HTTP              string                `json:"http"`
+	HTTPBase64        string                `json:"http_base64"`
+	Response          string                `json:"response"`
+	ScanType          []string              `json:"scan_type"`
+	Scheme            string                `json:"scheme"`
+	Host              map[string]string     `json:"host"`
+	ClientTLSFile     string                `json:"client_tls_file,omitempty"`
+	ClientTLSPassword string                `json:"client_tls_password,omitempty"`
+	Signature         *model.SignatureInput `json:"signature,omitempty"`
 }
 
 func (input jungleHappyScanInput) originalResponse() (model.Response, bool, error) {
@@ -1129,7 +1197,7 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	if scheme == "" {
 		scheme = "auto"
 	}
-	result := model.ScanInput{HTTP: rawHTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Mode: "standard"}
+	result := model.ScanInput{HTTP: rawHTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Signature: input.Signature, Mode: "standard"}
 	if len(input.ScanType) == 1 {
 		preset := strings.ToLower(strings.TrimSpace(input.ScanType[0]))
 		if preset == "passive" || preset == "normal" || preset == "deep" {

@@ -149,15 +149,15 @@ func TestFileUploadV21LegacyServletLeadingHyphenBoundary(t *testing.T) {
 }
 
 func TestReflectedXSSV21RejectsInertContextsAndFindsAttribute(t *testing.T) {
-	t.Run("comment-is-inert", func(t *testing.T) {
+	t.Run("comment-escape-is-detected", func(t *testing.T) {
 		ctx := testContext(t, "GET /search?q=hello HTTP/1.1\r\nHost: bank.test\r\n\r\n", model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte("<html></html>")})
 		ctx.SendFunc = func(_ context.Context, request *httpraw.Request) (model.Response, error) {
 			parsed, _ := url.Parse(request.Target)
 			return model.Response{StatusCode: 200, Headers: htmlHeader(), Body: []byte("<html><!--" + parsed.Query().Get("q") + "--></html>")}, nil
 		}
 		findings, err := (ReflectedXSS{}).Scan(ctx)
-		if err != nil || len(findings) != 0 {
-			t.Fatalf("HTML comment reflection must not alert: findings=%#v err=%v", findings, err)
+		if err != nil || len(findings) != 1 {
+			t.Fatalf("Unescaped comment closure must alert: findings=%#v err=%v", findings, err)
 		}
 	})
 

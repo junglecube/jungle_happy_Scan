@@ -4,16 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
-  <title>jungle_happy_Scan · V3.6.4</title>
-  <link rel="stylesheet" href="/styles.css?v=3.6.4">
-  <link rel="stylesheet" href="/v11.css?v=3.6.4">
-  <link rel="stylesheet" href="/webscan.css?v=3.6.4">
+<<<<<<< HEAD
+  <title>jungle_happy_Scan · V3.9.0</title>
+  <link rel="stylesheet" href="/styles.css?v=3.9.0">
+  <link rel="stylesheet" href="/v11.css?v=3.9.0-settings2">
+  <link rel="stylesheet" href="/webscan.css?v=3.9.0">
+=======
+  <title>jungle_happy_Scan · V3.8.3</title>
+  <link rel="stylesheet" href="/styles.css?v=3.8.3">
+  <link rel="stylesheet" href="/v11.css?v=3.8.3">
+  <link rel="stylesheet" href="/webscan.css?v=3.8.3">
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
-      <span><strong>jungle_happy_Scan</strong><small>V3.6.4</small></span>
+<<<<<<< HEAD
+      <span><strong>jungle_happy_Scan</strong><small>V3.9.0</small></span>
+=======
+      <span><strong>jungle_happy_Scan</strong><small>V3.8.3</small></span>
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
     </a>
     <nav aria-label="主导航">
       <button class="nav-button active" data-view="proxy">代理设置</button>
@@ -186,6 +197,15 @@
             <input id="client-tls-password" class="client-tls-password hidden" type="password" autocomplete="off" placeholder="PFX/P12 密码（可为空）" aria-label="PFX 或 P12 密码">
             <button type="button" class="text-button hidden" id="client-tls-clear">移除</button>
           </div>
+          <div class="client-tls-row signature-row">
+          <div class="client-tls-label"><strong>签名算法</strong><small>可选；业务字段变异后，发送前重新计算应用签名。HTTP 接口使用 JSON 的 request 字段传入和返回 Base64 请求。</small></div>
+            <select id="signature-mode" aria-label="签名算法"><option value="">不启用</option><option value="http">HTTP 接口</option><option value="local_js">上传 JS 文件</option></select>
+            <input id="signature-endpoint" class="signature-endpoint hidden" type="url" placeholder="http://127.0.0.1:9898/caljs" aria-label="签名 HTTP 接口">
+            <input id="signature-file-input" type="file" accept=".js,application/javascript,text/javascript" hidden>
+            <button type="button" class="text-button client-tls-upload hidden" id="signature-upload">上传 JS</button>
+            <span id="signature-name" class="client-tls-name">未选择</span>
+            <button type="button" class="text-button hidden" id="signature-clear">移除</button>
+          </div>
           <div class="request-footer"><span id="request-size">0 字符</span><span id="parse-result">等待输入</span></div>
         </section>
 
@@ -263,9 +283,8 @@
         <p>保存后立即原子写入服务器配置文件，新扫描任务自动使用；监听地址变更需要重启服务。</p>
       </div>
       <form id="settings-form">
-        <div class="settings-grid">
-          <section class="panel settings-card">
-            <div class="panel-heading"><div><span class="step">A</span><h2>服务与目标</h2></div></div>
+<div class="settings-section-heading"><h2>公共配置区</h2><p>服务、任务、会话与响应判定，共用于扫描任务。</p></div><div class="settings-grid"><section class="panel settings-card">
+            <div class="panel-heading"><div><h2>服务与目标</h2></div></div>
             <div class="form-grid">
               <label>监听地址<input id="cfg-listen" required></label>
               <label>传输兼容模式<select id="cfg-transport"><option value="normalized">Normalized（推荐）</option><option value="force_http1">强制 HTTP/1.1</option><option value="raw_http1">Raw HTTP/1.1</option></select></label>
@@ -280,15 +299,13 @@
               <label><input type="checkbox" id="cfg-redact" checked disabled> 结果证据保留原文（不执行脱敏）</label>
             </div>
           </section>
-
-	          <section class="panel settings-card">
-	            <div class="panel-heading"><div><span class="step">J</span><h2>Normal 默认插件</h2></div></div>
+<section class="panel settings-card">
+	            <div class="panel-heading"><div><h2>Normal 默认插件</h2></div></div>
 	            <p class="card-help">每行填写一个插件 ID。Normal 模式会自动勾选被动插件和这里列出的主动插件；留空表示不额外启用主动插件。</p>
 	            <textarea class="rule-textarea session-keys-textarea" id="cfg-normal-plugins" spellcheck="false" placeholder="sqli&#10;reflected_xss&#10;unauthorized"></textarea>
           </section>
-
-          <section class="panel settings-card">
-            <div class="panel-heading"><div><span class="step">B</span><h2>性能与任务</h2></div></div>
+<section class="panel settings-card">
+            <div class="panel-heading"><div><h2>性能与任务</h2></div></div>
             <div class="form-grid">
               <label>请求超时（秒）<input type="number" id="cfg-timeout" min="1" max="120"></label>
 	              <label>最大并发<input type="number" id="cfg-concurrency" min="1" max="100"></label>
@@ -306,43 +323,21 @@
             </div>
             <div class="toggle-grid"><label><input type="checkbox" id="cfg-shared-mode"> 共享服务安全模式</label></div>
           </section>
-
-	          <section class="panel settings-card">
-            <div class="panel-heading"><div><span class="step">C</span><h2>会话标识 Key</h2></div></div>
+<section class="panel settings-card">
+            <div class="panel-heading"><div><h2>会话标识 Key</h2></div></div>
             <p class="card-help">每行填写一个 Key，不区分大小写，也不需要指定位置。未授权插件会自动在 Cookie、Header、GET Query、POST Form、multipart 和 JSON 中查找；JSON 支持对象、嵌套对象、数组和数组内嵌套对象。</p>
             <textarea class="rule-textarea session-keys-textarea" id="cfg-session-keys" spellcheck="false" placeholder="cookie&#10;Authorization&#10;token&#10;accessToken&#10;des_sessionId&#10;sessionId"></textarea>
 	          </section>
-
-
-	          <section class="panel settings-card">
-	            <div class="panel-heading"><div><span class="step">D</span><h2>身份、CSRF 与扫描排除</h2></div></div>
+<section class="panel settings-card">
+	            <div class="panel-heading"><div><h2>身份、CSRF 与扫描排除</h2></div></div>
 	            <div class="form-grid">
 	              <label class="full">CSRF Header 名（每行一个）<textarea class="mini-textarea" id="cfg-csrf-headers"></textarea></label>
 	              <label class="full">不参与扫描的参数名（每行一个，不区分大小写）<textarea class="mini-textarea" id="cfg-excluded-params" placeholder="content_string&#10;signature_raw"></textarea></label>
             </div>
 	            <p class="card-help">命中的参数无论位于 Query、Form、JSON（含数组和嵌套对象）、Multipart、Cookie 或主动扫描 Header，都不会成为 Payload 变异点；其内部嵌套 JSON/XML/Base64 内容也不会继续展开。</p>
           </section>
-
-          <section class="panel settings-card">
-            <div class="panel-heading"><div><span class="step">H</span><h2>协议适配与服务边界</h2></div></div>
-            <p class="card-help">可扫描 Header 会作为主动变异插入点；共享服务模式要求目标白名单非空。配置写入 CIDR 留空表示兼容允许所有来源，生产共享部署建议只填写管理网段。</p>
-            <div class="form-grid">
-              <label>主动扫描 Header（每行一个）<textarea class="mini-textarea tall" id="cfg-scan-headers"></textarea></label>
-              <label>配置写入允许 CIDR（每行一个）<textarea class="mini-textarea tall" id="cfg-config-cidrs" placeholder="127.0.0.1/32&#10;10.0.0.0/8"></textarea></label>
-            </div>
-          </section>
-
-          <section class="panel settings-card">
-            <div class="panel-heading"><div><span class="step">I</span><h2>动态签名与会话刷新</h2></div></div>
-            <p class="card-help">请求变换支持 timestamp、uuid、regex_replace、sha256、hmac-sha256、base64；响应提取可刷新 Header、Query、JSON、Cookie、Form 或 Multipart 字段，且不会重排无关字段。每项均为 JSON 数组，留空请填写 <code>[]</code>。</p>
-            <div class="rule-grid">
-              <label>请求动态变换 JSON<textarea class="rule-textarea" id="cfg-request-transforms" spellcheck="false"></textarea></label>
-              <label>响应提取规则 JSON<textarea class="rule-textarea" id="cfg-response-extractors" spellcheck="false"></textarea></label>
-            </div>
-          </section>
-
-	          <section class="panel settings-card">
-	            <div class="panel-heading"><div><span class="step">E</span><h2>离线回连</h2></div></div>
+<section class="panel settings-card">
+	            <div class="panel-heading"><div><h2>离线回连</h2></div></div>
             <div class="form-grid">
               <label class="full">回连监听地址（修改后需重启）<input id="cfg-callback-listen" placeholder="0.0.0.0:61166"></label>
 	              <label class="full">目标可访问的回连基础地址<input id="cfg-callback" placeholder="http://121.43.208.121:61166"></label>
@@ -351,6 +346,12 @@
 	              <label class="full">LDAP/JNDI 最大并发连接（修改后需重启）<input id="cfg-callback-max-connections" type="number" min="1" max="4096"></label>
             </div>
 	            <p class="card-help">HTTP 回连默认监听 61166，LDAP/JNDI 安全接收器默认监听 61167；基础地址应填写目标服务器能够访问的扫描器 IP 或域名。两类监听器只接收一次性 Token，LDAP 端不返回远程类或对象。</p>
+<<<<<<< HEAD
+	          <div class="form-grid"><label>回连同步等待（秒）<input id="cfg-callback-wait" type="number" min="0" max="60"></label><label>迟到回连补报窗口（秒，0 关闭）<input id="cfg-callback-late" type="number" min="0" max="600"></label></div></section>
+<section class="panel settings-card">
+	            <div class="panel-heading"><div><h2>响应语义</h2></div></div>
+            <p class="card-help">按“包含关键词”判断业务结果，每行填写一个词或短语即可。成功和失败同时命中时，以失败为准；未命中时保持未知，不会把 HTTP 200 自动当作业务成功。</p>
+=======
 	          </section>
 
           <section class="panel settings-card full-card rule-editor-card">
@@ -361,6 +362,7 @@
               <label>参数名（每行一个）<textarea class="rule-textarea small" id="cfg-rule-parameters"></textarea></label>
               <label>URL 关键字（每行一个）<textarea class="rule-textarea small" id="cfg-rule-url-keywords"></textarea></label>
               <label>同源探测路径（每行一个）<textarea class="rule-textarea small" id="cfg-rule-paths"></textarea></label>
+              <label class="full rule-allowlist-field">未授权扫描白名单（每行一个路径片段）<textarea class="rule-textarea small" id="cfg-rule-allow-paths" placeholder="login&#10;checkHealth"></textarea><small>仅对“未授权访问”插件生效；大小写不敏感，按路径片段模糊匹配并忽略查询参数。例如 login 可匹配 /api/login、/api2/Login/。白名单接口将不会执行未授权检测。</small></label>
               <label>Payload JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-payloads" spellcheck="false"></textarea></label>
               <label>检测正则 JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-patterns" spellcheck="false"></textarea></label>
             </div>
@@ -369,21 +371,33 @@
 	          <section class="panel settings-card">
 	            <div class="panel-heading"><div><span class="step">F</span><h2>响应语义</h2></div></div>
             <p class="card-help">登录/授权失败正则同时用于未授权插件和 jungle_happy_scan/lite 同步接口的扫描前鉴权预检；每行填写一条 RE2 正则，匹配响应状态行或 Body。401/403 无需配置。动态响应归一化正则仅用于扫描器内部的响应相似度比较：时间戳、requestId、traceId、nonce 等每次变化的内容会先替换为统一占位符，从而降低动态接口误报；不会修改或保存目标的真实响应。</p>
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
             <div class="form-grid">
-              <label class="full">业务成功正则（每行一个）<textarea class="mini-textarea tall" id="cfg-success"></textarea></label>
-              <label class="full">登录/授权失败正则（每行一个）<textarea class="mini-textarea tall" id="cfg-denied"></textarea></label>
-              <label>前台数据库报错特征默认可信度
+              <div class="business-keyword-grid">
+                <label class="business-keyword success-keywords"><span>业务成功关键词</span><small>例如：处理成功、发送成功、code=000000</small><textarea class="mini-textarea" id="cfg-business-success" spellcheck="false" placeholder="发送成功&#10;处理成功&#10;code=000000"></textarea></label>
+                <label class="business-keyword failure-keywords"><span>业务失败关键词</span><small>例如：余额不足、请求频繁、验证码错误</small><textarea class="mini-textarea" id="cfg-business-failure" spellcheck="false" placeholder="余额不足&#10;请求频繁&#10;验证码错误"></textarea></label>
+              </div>
+              <p class="card-help full">登录/授权拒绝仍由系统状态码和后台已有拒绝规则处理；这里专门配置业务成功与业务失败提示。</p>
+            </div>
+          </section></div><div class="settings-plugin-area"><section class="panel settings-card full-card rule-editor-card">
+            <div class="panel-heading"><div><h2>插件配置区</h2></div><span class="rule-status" id="rule-status">读取中</span></div>
+            <p class="card-help">点击中文卡片查看并编辑插件配置；切换时保留未保存内容，最后统一点击“保存配置”。Payload 支持占位符 <code>{{value}}</code>、<code>{{token}}</code>、<code>{{host}}</code>、<code>{{callback}}</code>、<code>{{root}}</code>；新增项保持相同 JSON 字段即可。保存配置后新扫描立即生效。</p>
+            <div id="cfg-rule-plugin" class="config-plugin-picker" aria-label="选择要配置的插件"></div><div id="config-plugin-detail" hidden><div class="rule-toolbar"><h3 id="config-plugin-title"></h3><button type="button" class="text-button" id="format-rule-json">格式化 JSON</button></div><div id="config-sms-fields" class="form-grid" hidden><label>短信同号码请求数<input id="cfg-sms-attempts" type="number" min="2" max="100"></label><label>短信成功次数阈值（超过才报告）<input id="cfg-sms-threshold" type="number" min="1" max="99"></label><label>短信观察窗口（秒）<input id="cfg-sms-window" type="number" min="1" max="300"></label><p class="card-help full">喷洒号码池在下方 Payload 中配置 spray_number，不自动补充号码。</p></div><div id="config-sql-fields" class="form-grid" hidden><label>前台数据库报错特征默认可信度
                 <select id="cfg-sqli-error-confidence">
                   <option value="tentative">待确认</option>
                   <option value="firm">较确定（推荐）</option>
                   <option value="certain">已确认</option>
                 </select>
-              </label>
-              <label class="full">数据库报错特征（每行一个正则）<textarea class="mini-textarea tall" id="cfg-sqli-errors" placeholder="(?i)syntax error&#10;ORA-\d{5}"></textarea></label>
-              <label class="full">动态响应归一化正则（每行一个）<textarea class="mini-textarea tall" id="cfg-dynamic"></textarea></label>
+              </label><label class="full">数据库报错特征（每行一个正则）<textarea class="mini-textarea tall" id="cfg-sqli-errors" placeholder="(?i)syntax error&#10;ORA-\d{5}"></textarea></label><p class="card-help full">快速与深度 SQL 共用这些报错判定设置。</p></div>
+            <div class="rule-grid">
+              <label>参数名（每行一个）<textarea class="rule-textarea small" id="cfg-rule-parameters"></textarea></label>
+              <label>URL 关键字（每行一个）<textarea class="rule-textarea small" id="cfg-rule-url-keywords"></textarea></label>
+              <label>同源探测路径（每行一个）<textarea class="rule-textarea small" id="cfg-rule-paths"></textarea></label>
+              <label class="full rule-allowlist-field">未授权扫描白名单（每行一个路径片段）<textarea class="rule-textarea small" id="cfg-rule-allow-paths" placeholder="login&#10;checkHealth"></textarea><small>仅对“未授权访问”插件生效；大小写不敏感，按路径片段模糊匹配并忽略查询参数。例如 login 可匹配 /api/login、/api2/Login/。白名单接口将不会执行未授权检测。</small></label>
+              <label>Payload JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-payloads" spellcheck="false"></textarea></label>
+              <label>检测正则 JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-patterns" spellcheck="false"></textarea></label>
             </div>
-          </section>
-        </div>
+          </div></section></div>
         <div class="save-bar">
           <div><strong>配置文件</strong><span id="config-path">读取中…</span></div>
           <div class="save-controls"><input type="password" id="cfg-password" autocomplete="current-password" placeholder="输入配置保存密码" aria-label="配置保存密码"><button class="primary-button" type="submit">保存配置</button></div>
@@ -398,37 +412,88 @@
       </div>
 
       <div class="release-summary panel">
-	        <div><span>当前版本</span><strong>V3.6.4</strong></div>
+<<<<<<< HEAD
+        <div><span>当前版本</span><strong>V3.9.0</strong></div>
+=======
+        <div><span>当前版本</span><strong>V3.8.3</strong></div>
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
-	        <div><span>漏洞插件</span><strong>52 个</strong></div>
+	        <div><span>漏洞插件</span><strong>48 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
       </div>
 
 	      <div class="release-timeline">
-	        <article class="release-card current">
-	          <div class="release-marker"><span></span></div>
-	          <div class="release-content panel">
-	            <header><div><span class="release-tag">CURRENT</span><h2>V3.6.4</h2></div><time datetime="2026-09-04">2026-09-04</time></header>
-	            <p class="release-lead">为同步扫描增加原始请求鉴权预检与响应一致性校验，避免失效会话被误当成有效基线，并保留完整的失败诊断。</p>
-	            <div class="architecture-flow webscan-release-flow" aria-label="V3.6.4 同步扫描鉴权预检流程">
-	              <span>原始报文</span><b>→</b><span>鉴权预检</span><b>→</b><span>响应相似度</span><b>→</b><span>首个扫描基线</span><b>→</b><span>正式扫描</span>
-	            </div>
-	            <div class="release-groups">
-	              <section><h3>同步鉴权预检</h3><ul>
-	                <li><code>jungle_happy_scan</code> 与 Lite 接口现在先发送未修改的原始报文；响应为 <code>401/403</code> 或命中 <code>denied_patterns</code> 时直接返回失败。</li>
-	                <li>预检失败不会创建扫描任务，也不会继续发送插件探测请求；V1、V2、Full、Lite 和根路径兼容别名共用同一门禁。</li>
-	              </ul></section>
-	              <section><h3>捕获响应一致性</h3><ul>
-	                <li>同步接口可接收调用方捕获的原始 <code>response</code>，实时预检响应与其相似度低于 <code>0.90</code> 时停止扫描。</li>
-	                <li>成功预检的实时响应直接作为首个扫描基线，避免状态变更接口重复发送原始请求。</li>
-	              </ul></section>
-	              <section><h3>机器可读诊断</h3><ul>
-	                <li><code>connectivity</code> 增加网络状态、鉴权状态、失败原因、命中规则和响应相似度字段，不返回完整响应正文。</li>
-	                <li>相似度指标同步写入 Finding evidence；普通异步扫描、手动连通性和 WEB 代理扫描保持原有入口行为。</li>
-	              </ul></section>
-	            </div>
-	          </div>
-	        </article>
+<<<<<<< HEAD
+        <article class="release-entry">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">CURRENT</span><h2>V3.9.0</h2></div><time datetime="2026-09-12">2026-09-12</time></header>
+            <p class="release-lead">修复扫描判定、补全请求对照与迟到回连，业务成功／失败规则可在持久配置中管理。</p>
+            <div class="release-groups"><section><h3>扫描准确性</h3><ul><li>短信失败优先；修复 XXE 文档和 CDATA，上传执行保留真实等级。</li><li>XSS 逐位置检查；文件读取增加不存在路径对照；SQL 深度先覆盖各参数。</li><li>敏感信息按 validator 校验；分数不升级确认状态。</li></ul></section><section><h3>配置与升级</h3><ul><li>前台配置业务规则、短信阈值和回连等待窗口。</li><li>替换二进制并重启，沿用原 config；首次自动备份并迁移到版本 33。</li></ul></section></div>
+          </div>
+        </article>
+        <article class="release-card current">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.8.3</h2></div><time datetime="2026-09-11">2026-09-11</time></header>
+=======
+        <article class="release-card current">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">CURRENT</span><h2>V3.8.3</h2></div><time datetime="2026-09-11">2026-09-11</time></header>
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+            <p class="release-lead">应用签名 HTTP 接口统一为 JSON request 协议，并修复 Linux 下 preSign.py 调用现有 Node.js 脚本的兼容性。</p>
+            <div class="architecture-flow webscan-release-flow" aria-label="V3.8.3 签名适配流程">
+              <span>JSON request</span><b>→</b><span>Node.js 脚本</span><b>→</b><span>JSON request</span><b>→</b><span>原始 HTTP</span>
+            </div>
+            <div class="release-groups">
+              <section><h3>HTTP 签名接口</h3><ul>
+                <li>请求体为 <code>{"request":"&lt;base64&gt;"}</code>，成功响应体为同结构。</li>
+                <li>错误使用非 2xx 状态码和 JSON error 字段返回。</li>
+              </ul></section>
+              <section><h3>Linux 兼容</h3><ul>
+                <li>按 preSign.py 所在目录定位大小写正确的 PreSignJS。</li>
+                <li>默认调用 node，并支持环境变量覆盖运行时路径。</li>
+              </ul></section>
+            </div>
+          </div>
+        </article>
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.8.2</h2></div><time datetime="2026-09-10">2026-09-10</time></header>
+            <p class="release-lead">SQL 注入收敛为快速与深度两项，补齐字符串尾部、括号和堆叠时间探测，并以不同延迟时长复核降低误报。</p>
+            <div class="architecture-flow webscan-release-flow" aria-label="V3.8.2 SQL 深度检测流程">
+              <span>快速差分</span><b>→</b><span>语义专项</span><b>→</b><span>时间初筛</span><b>→</b><span>反向确认</span><b>→</b><span>半时长复核</span>
+            </div>
+            <div class="release-groups">
+              <section><h3>SQL 快速</h3><ul>
+                <li>单引号破坏、双单引号与空串拼接恢复；条件错误及数值、字符串、LIKE 布尔差分。</li>
+                <li>稳定阴性普通参数通常 5 次请求；有信号再展开确认，不执行时间延迟和堆叠。</li>
+              </ul></section>
+              <section><h3>SQL 深度</h3><ul>
+                <li>包含快速，增加双引号、括号、注释、OR、CAST，及 ORDER BY、LIMIT/OFFSET、MyBatis 动态片段。</li>
+                <li>补充精确替换/追加、PostgreSQL 无注释尾部和括号闭合、LIKE/拼接、MySQL/PostgreSQL 分号堆叠延迟。</li>
+              </ul></section>
+              <section><h3>时间判断与请求成本</h3><ul>
+                <li>先 A/B 两请求筛选，有信号才补齐 A-B-B-A-C-A；C 使用半时长，固定慢响应和单次抖动不直接报漏洞。</li>
+                <li>允许稳定应用 500 的时间证据；排除鉴权、限流、网关超时。完整预留六请求预算，预算不足标记部分覆盖。</li>
+              </ul></section>
+              <section><h3>升级兼容与说明</h3><ul>
+                <li>Normal 默认快速；Deep 包含深度且取消重复快速。旧 SQL ID 兼容映射，旧规则和管理员配置保留，配置版本 32。</li>
+                <li>共 48 个公开插件；详细差异、调用示例、数据库上下文限制和预算设置见使用说明 5.8–5.9。</li>
+              </ul></section>
+            </div>
+          </div>
+        </article>
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.8.0</h2></div><time datetime="2026-09-10">2026-09-10</time></header>
+            <p class="release-lead">新增可选签名算法：HTTP 接口或上传 JS 文件。每次业务字段变异后重新签名，扫描、连通性、爆破和外层同步接口共用适配。</p>
+            <p>HTTP 模式接收和返回 JSON request 中的 Base64 完整请求；本地 JS 模式需在扫描器服务器安装 Node.js。客户端 TLS 证书与签名配置可组合使用。</p>
+          </div>
+        </article>
 	        <article class="release-card">
 	          <div class="release-marker"><span></span></div>
 	          <div class="release-content panel">
@@ -682,7 +747,7 @@
 	                <li>核心输入诱导异常插件先使用单引号探针；只有出现新增 Java、Spring、ORM、SQL、路径或调试泄露特征，才追加原值对照和重复确认。</li>
 	              </ul></section>
 	              <section><h3>扫描中心重排</h3><ul>
-	                <li>52 个插件按 SQL、文件、权限、代码执行、服务端请求、框架配置及响应业务风险分组，相关能力不再分散。</li>
+	                <li>48 个插件按 SQL、文件、权限、代码执行、服务端请求、框架配置及响应业务风险分组，相关能力不再分散。</li>
 	                <li>插件按漏洞族分组后采用每行两个卡片，常驻显示插件名称、小字说明和风险类型；窄屏自动切换为单列。</li>
 	              </ul></section>
 	              <section><h3>结果与覆盖合并</h3><ul>
@@ -1105,8 +1170,14 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/codemirror.js?v=3.6.4" defer></script>
-  <script src="/app.js?v=3.6.4" defer></script>
-  <script src="/webscan.js?v=3.6.4" defer></script>
+<<<<<<< HEAD
+  <script src="/codemirror.js?v=3.9.0" defer></script>
+  <script src="/app.js?v=3.9.0-settings2" defer></script>
+  <script src="/webscan.js?v=3.9.0" defer></script>
+=======
+  <script src="/codemirror.js?v=3.8.3" defer></script>
+  <script src="/app.js?v=3.8.3" defer></script>
+  <script src="/webscan.js?v=3.8.3" defer></script>
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 </body>
 </html>

@@ -27,23 +27,28 @@ type Plugin interface {
 }
 
 type Context struct {
-	Context       context.Context
-	Request       *httpraw.Request
-	Baselines     []model.Response
-	Baseline      model.Response
-	Points        []httpraw.InsertionPoint
-	Mode          string
-	Config        config.Config
-	Callbacks     *callback.Registry
-	SendFunc      func(context.Context, *httpraw.Request) (model.Response, error)
-	Progress      func(pluginID string, completed, total int)
-	OnRequest     func(used int)
-	OnResolution  func(kind string, count int)
-	RequestBudget int
-	budgetMu      sync.Mutex
-	requestsUsed  int
-	requestsHeld  int
-	budgetHit     bool
+	OnResponse        func(*httpraw.Request, model.Response)
+	ActivePluginID    string
+	OnLateFindings    func([]model.Finding)
+	OnCallbackPending func(int)
+	Context           context.Context
+	Request           *httpraw.Request
+	Baselines         []model.Response
+	Baseline          model.Response
+	Points            []httpraw.InsertionPoint
+	Mode              string
+	Config            config.Config
+	Callbacks         *callback.Registry
+	SendFunc          func(context.Context, *httpraw.Request) (model.Response, error)
+	Progress          func(pluginID string, completed, total int)
+	OnRequest         func(used int)
+	OnResolution      func(kind string, count int)
+	RequestBudget     int
+	budgetMu          sync.Mutex
+	requestsUsed      int
+	requestsHeld      int
+	budgetHit         bool
+	coverageIssues    []string
 }
 
 func (c *Context) Send(request *httpraw.Request) (model.Response, error) {
@@ -61,7 +66,11 @@ func (c *Context) Send(request *httpraw.Request) (model.Response, error) {
 	if c.OnRequest != nil {
 		c.OnRequest(used)
 	}
-	return c.SendFunc(c.Context, request)
+	response, err := c.SendFunc(c.Context, request)
+	if err == nil {
+		response = c.processResponse(request, response)
+	}
+	return response, err
 }
 
 var ErrPluginBudgetExhausted = errors.New("插件公平请求预算已用尽")
@@ -114,7 +123,11 @@ func (r *RequestCohort) Send(request *httpraw.Request) (model.Response, error) {
 	if r.ctx.OnRequest != nil {
 		r.ctx.OnRequest(used)
 	}
-	return r.ctx.SendFunc(r.ctx.Context, request)
+	response, err := r.ctx.SendFunc(r.ctx.Context, request)
+	if err == nil {
+		response = r.ctx.processResponse(request, response)
+	}
+	return response, err
 }
 
 func (r *RequestCohort) Close() {
@@ -421,21 +434,21 @@ func PassiveMeta(id, name, description string) model.PluginMeta {
 }
 
 var registry = []Plugin{
-	Unauthorized{}, SQLInjection{}, SQLInjectionExtended{}, SQLInjectionTiming{}, SQLOrderBy{}, SQLLimit{},
+	Unauthorized{}, SQLInjection{}, SQLInjectionDeep{},
 	XXE{}, XXEExtended{}, FileRead{}, FileReadEncoded{}, FileUpload{}, FileUploadExecution{}, SensitiveData{},
 	CORS{}, ReflectedXSS{}, SSRF{}, OpenRedirect{}, CRLFInjection{},
 	SSTI{}, SpringActuator{}, SecurityHeaders{}, JWTWeak{}, IDOR{},
 	CommandInjection{}, CommandInjectionOAST{}, CommandInjectionTiming{}, CSRF{}, APIExposure{},
 	ErrorDisclosure{}, ErrorDisclosureExtended{}, NoSQLInjection{},
 	LDAPInjection{}, XPathInjection{}, JavaDeserialization{}, MethodOverride{},
-	MassAssignment{}, MassAssignmentExtended{}, MyBatisDynamicSQL{}, PathNormalization{}, ParameterConfusion{},
+	MassAssignment{}, MassAssignmentExtended{}, PathNormalization{}, ParameterConfusion{},
 	JSONPolymorphic{}, GraphQLSecurity{}, GraphQLAliasAbuse{}, SMSAbuse{},
 	Shiro{}, JavaExpression{}, JavaExpressionExtended{}, JNDIInjection{}, HostHeaderInjection{},
 	JWTActive{}, ProxyTrustBypass{}, HTTPTrace{},
 }
 
 var normalActivePluginIDs = map[string]bool{
-	"sqli": true, "sqli_extended": true, "file_upload": true,
+	"sqli": true, "file_upload": true,
 	"file_read": true, "reflected_xss": true, "unauthorized": true,
 	"xxe": true, "sms_abuse": true, "sensitive_data": true,
 }
@@ -451,7 +464,7 @@ func PresetIDsWithNormal(name string, normalPlugins []string) ([]string, error) 
 	normal := normalActivePluginIDs
 	if normalPlugins != nil {
 		normal = make(map[string]bool, len(normalPlugins))
-		for _, id := range normalPlugins {
+		for _, id := range config.NormalizeSQLPluginIDs(normalPlugins, true) {
 			normal[strings.TrimSpace(id)] = true
 		}
 	}
@@ -473,7 +486,7 @@ func PresetIDsWithNormal(name string, normalPlugins []string) ([]string, error) 
 			return nil, fmt.Errorf("未知扫描预设: %s", name)
 		}
 	}
-	return result, nil
+	return config.NormalizeSQLPluginIDs(result, false), nil
 }
 
 func All() []Plugin {
@@ -496,13 +509,16 @@ func Select(ids []string, mode string) ([]Plugin, error) {
 	// entirely defined by plugin IDs (or a preset expanded into plugin IDs).
 	_ = mode
 	selected := make(map[string]bool)
-	for _, id := range ids {
+	for _, id := range config.NormalizeSQLPluginIDs(ids, false) {
 		selected[id] = true
 	}
 	allSelected := selected["all"]
 	var result []Plugin
 	for _, item := range All() {
 		meta := item.Meta()
+		if allSelected && meta.ID == "sqli" {
+			continue
+		}
 		if allSelected || selected[meta.ID] {
 			result = append(result, item)
 			delete(selected, meta.ID)
@@ -536,4 +552,33 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Context) processResponse(request *httpraw.Request, response model.Response) model.Response {
+	scoped := diff.ScopedBusinessRules(c.Config.BusinessRules, c.ActivePluginID, request.Target)
+	if len(scoped) > 0 {
+		cfg := c.Config
+		cfg.BusinessRules = scoped
+		response.BusinessOutcome = string(diff.EvaluateBusiness(response, cfg, c.ActivePluginID, request.Target).Outcome)
+	}
+	if c.OnResponse != nil {
+		c.OnResponse(request, response)
+	}
+	return response
+}
+
+func (c *Context) CoverageIssue(reason string) {
+	c.budgetMu.Lock()
+	defer c.budgetMu.Unlock()
+	for _, existing := range c.coverageIssues {
+		if existing == reason {
+			return
+		}
+	}
+	c.coverageIssues = append(c.coverageIssues, reason)
+}
+func (c *Context) CoverageIssues() []string {
+	c.budgetMu.Lock()
+	defer c.budgetMu.Unlock()
+	return append([]string(nil), c.coverageIssues...)
 }

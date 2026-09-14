@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"html"
+	"regexp"
 	"strings"
 
 	"jungle_happy_Scan/internal/config"
@@ -21,7 +21,7 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
 	}
-	total := len(ctx.Points) * 2
+	total := len(ctx.Points) * xssRequestEstimate(payloadsForMode(rule, ctx.Mode))
 	done := 0
 	ctx.Progress(meta.ID, done, max(total, 1))
 	var findings []model.Finding
@@ -43,39 +43,54 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 			ctx.Progress(meta.ID, done, total)
 			continue
 		}
-		contextKind := bestReflectionContext(markerResponse.Text(), token)
-		if !executableReflectionContext(contextKind) {
-			done++
-			ctx.Progress(meta.ID, done, total)
-			continue
-		}
-		payloadRule, ok := xssPayloadForContext(payloadsForMode(rule, ctx.Mode), contextKind)
-		if !ok {
-			done++
-			ctx.Progress(meta.ID, done, total)
-			continue
-		}
-		payload := expandPayload(payloadRule.Payload, map[string]string{"token": token, "value": point.Value})
-		testReq, err := ctx.Mutate(point, payload)
-		if err != nil {
-			continue
-		}
-		testResponse, err := ctx.Send(testReq)
-		if err != nil {
-			return findings, err
-		}
-		done++
-		ctx.Progress(meta.ID, done, total)
-		testContexts := reflectionContexts(testResponse.Text(), token)
-		if strings.Contains(testResponse.Text(), payload) && !strings.Contains(testResponse.Text(), html.EscapeString(payload)) &&
-			contains(testContexts, contextKind) {
-			findings = append(findings, Finding(meta, "输入在可执行 HTML 上下文中未经编码反射", model.SeverityLow, model.ConfidenceFirm, point.Label(),
-				"唯一标记确认输入被反射，随后上下文 payload 的关键字符完整进入 "+contextKind+" 上下文。V1 不虚构浏览器执行证据。",
-				"按 HTML、属性和 JavaScript 输出上下文编码；不要拼接不可信输入，并部署严格 CSP 作为纵深防御。",
-				[]model.Evidence{
-					ctx.Evidence("唯一标记被 HTML 响应反射", markerReq, &markerResponse, map[string]any{"context": contextKind, "token": token}),
-					ctx.Evidence("上下文 payload 未被编码", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name, "match": payload}),
-				}, "OWASP WSTG-INPV-01"))
+		seen := map[string]bool{}
+		for _, contextKind := range reflectionContexts(markerResponse.Text(), token) {
+			if seen[contextKind] {
+				continue
+			}
+			seen[contextKind] = true
+			candidates := xssCandidates(payloadsForMode(rule, ctx.Mode), contextKind)
+			for _, payloadRule := range candidates {
+				payload := expandPayload(payloadRule.Payload, map[string]string{"token": token, "value": point.Value})
+				testReq, err := ctx.Mutate(point, payload)
+				if err != nil {
+					ctx.ResolveMutationFailed(1)
+					continue
+				}
+				testResponse, err := ctx.Send(testReq)
+				if err != nil {
+					return findings, err
+				}
+				done++
+				ctx.Progress(meta.ID, done, total)
+				if !xssHTMLResponse(strings.ToLower(testResponse.Header("Content-Type")), testResponse.Text()) {
+					continue
+				}
+				// Assess each raw payload occurrence in its own original context.
+				// An encoded copy elsewhere must not veto this occurrence.
+				matched := false
+				offset := 0
+				for offset < len(testResponse.Text()) {
+					relative := strings.Index(testResponse.Text()[offset:], payload)
+					if relative < 0 {
+						break
+					}
+					at := offset + relative
+					if htmlContextAt(testResponse.Text(), at) == contextKind {
+						matched = true
+						break
+					}
+					offset = at + len(payload)
+				}
+				if !matched {
+					continue
+				}
+				findings = append(findings, Finding(meta, "输入在 HTML 上下文中未经编码反射", model.SeverityLow, model.ConfidenceFirm, point.Label(),
+					"唯一标记与上下文闭合 payload 在同一反射位置完整出现；尚未取得浏览器执行证据。",
+					"按 HTML、属性和 JavaScript 输出上下文编码，避免将不可信内容拼接为源码。",
+					[]model.Evidence{ctx.Evidence("唯一标记定位反射位置", markerReq, &markerResponse, map[string]any{"context": contextKind, "token": token}), ctx.Evidence("当前反射位置保留完整 payload", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name, "match": payload})}, "OWASP WSTG-INPV-01"))
+				break
+			}
 		}
 	}
 	return findings, nil
@@ -165,39 +180,74 @@ func reflectionContexts(body, token string) []string {
 }
 
 func htmlContextAt(body string, at int) string {
-	prefix := strings.ToLower(body[:at])
-	if strings.LastIndex(prefix, "<!--") > strings.LastIndex(prefix, "-->") {
-		return "comment"
-	}
-	if rawElementOpen(prefix, "script") {
-		return scriptContextAt(body, at)
-	}
-	for _, name := range []string{"style", "textarea", "title", "xmp", "noembed", "noframes"} {
-		if rawElementOpen(prefix, name) {
-			return "inert-text"
+	lower := strings.ToLower(body)
+	raw := ""
+	for i := 0; i < at; {
+		if raw != "" {
+			end := strings.Index(lower[i:], "</"+raw)
+			if end < 0 || i+end >= at {
+				if raw == "script" {
+					return scriptContextAt(body, at)
+				}
+				return "raw-" + raw
+			}
+			i += end
+			raw = ""
 		}
+		if strings.HasPrefix(lower[i:], "<!--") {
+			end := strings.Index(lower[i+4:], "-->")
+			if end < 0 || i+4+end >= at {
+				return "comment"
+			}
+			i += 4 + end + 3
+			continue
+		}
+		if body[i] != '<' {
+			i++
+			continue
+		}
+		start := i
+		i++
+		quote := byte(0)
+		for i < at {
+			ch := body[i]
+			if quote != 0 {
+				if ch == quote {
+					quote = 0
+				}
+			} else if ch == '\'' || ch == '"' {
+				quote = ch
+			} else if ch == '>' {
+				break
+			}
+			i++
+		}
+		fragment := body[start:at]
+		if i == at {
+			if strings.HasPrefix(fragment, "</") || strings.HasPrefix(fragment, "<!") || strings.HasPrefix(fragment, "<?") {
+				return "inert-tag"
+			}
+			if quote == '"' {
+				return "attribute-double"
+			}
+			if quote == '\'' {
+				return "attribute-single"
+			}
+			if insideUnquotedAttribute(fragment) {
+				return "attribute-unquoted"
+			}
+			return "tag"
+		}
+		tag := strings.Fields(strings.TrimSpace(lower[start+1 : i]))
+		if len(tag) > 0 {
+			switch tag[0] {
+			case "script", "style", "textarea", "title", "xmp", "noembed", "noframes":
+				raw = tag[0]
+			}
+		}
+		i++
 	}
-	open := strings.LastIndex(prefix, "<")
-	close := strings.LastIndex(prefix, ">")
-	if open <= close {
-		return "html-text"
-	}
-	tagFragment := body[open:at]
-	lowerFragment := strings.ToLower(tagFragment)
-	if strings.HasPrefix(lowerFragment, "<!") || strings.HasPrefix(lowerFragment, "<?") ||
-		strings.HasPrefix(lowerFragment, "</") {
-		return "inert-tag"
-	}
-	switch quotedAttributeDelimiter(tagFragment) {
-	case '"':
-		return "attribute-double"
-	case '\'':
-		return "attribute-single"
-	}
-	if insideUnquotedAttribute(tagFragment) {
-		return "attribute-unquoted"
-	}
-	return "tag"
+	return "html-text"
 }
 
 func rawElementOpen(prefix, name string) bool {
@@ -208,20 +258,11 @@ func rawElementOpen(prefix, name string) bool {
 
 func quotedAttributeDelimiter(fragment string) byte {
 	quote := byte(0)
-	escaped := false
-	for index := 1; index < len(fragment); index++ {
-		current := fragment[index]
-		if escaped {
-			escaped = false
-			continue
-		}
-		if current == '\\' {
-			escaped = true
-			continue
-		}
-		if quote == 0 && (current == '"' || current == '\'') {
-			quote = current
-		} else if current == quote {
+	for i := 1; i < len(fragment); i++ {
+		c := fragment[i]
+		if quote == 0 && (c == '"' || c == '\'') {
+			quote = c
+		} else if c == quote {
 			quote = 0
 		}
 	}
@@ -245,11 +286,42 @@ func scriptContextAt(body string, at int) string {
 	if start < 0 {
 		return "script"
 	}
+	tag := strings.ToLower(body[open : open+start+1])
+	typeMatch := regexp.MustCompile(`(?i)\btype\s*=\s*["']?([^"'\s>]+)`).FindStringSubmatch(tag)
+	if len(typeMatch) == 2 && typeMatch[1] != "module" && !strings.Contains(typeMatch[1], "javascript") && !strings.Contains(typeMatch[1], "ecmascript") {
+		return "raw-script"
+	}
 	script := body[open+start+1 : at]
 	quote := byte(0)
 	escaped := false
+	lineComment, blockComment := false, false
 	for index := 0; index < len(script); index++ {
 		current := script[index]
+		if lineComment {
+			if current == '\n' || current == '\r' {
+				lineComment = false
+			}
+			continue
+		}
+		if blockComment {
+			if current == '*' && index+1 < len(script) && script[index+1] == '/' {
+				blockComment = false
+				index++
+			}
+			continue
+		}
+		if quote == 0 && current == '/' && index+1 < len(script) {
+			if script[index+1] == '/' {
+				lineComment = true
+				index++
+				continue
+			}
+			if script[index+1] == '*' {
+				blockComment = true
+				index++
+				continue
+			}
+		}
 		if escaped {
 			escaped = false
 			continue
@@ -264,6 +336,12 @@ func scriptContextAt(body string, at int) string {
 			quote = 0
 		}
 	}
+	if lineComment {
+		return "script-comment-line"
+	}
+	if blockComment {
+		return "script-comment-block"
+	}
 	switch quote {
 	case '\'':
 		return "script-single"
@@ -274,4 +352,43 @@ func scriptContextAt(body string, at int) string {
 	default:
 		return "script-code"
 	}
+}
+
+func xssCandidates(payloads []config.PayloadRule, kind string) []config.PayloadRule {
+	var result []config.PayloadRule
+	for _, p := range payloads {
+		if p.Kind == kind {
+			if kind == "script-code" && strings.HasPrefix(p.Payload, "{{token}};") {
+				p.Payload = strings.Replace(p.Payload, "{{token}};", "/*{{token}}*/;", 1)
+			}
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 && executableReflectionContext(kind) && !strings.HasPrefix(kind, "script-comment") {
+		if p, ok := xssPayloadForContext(payloads, kind); ok {
+			result = append(result, p)
+		}
+	}
+	prefix := ""
+	if strings.HasPrefix(kind, "raw-") {
+		prefix = "</" + strings.TrimPrefix(kind, "raw-") + ">"
+	}
+	if kind == "comment" {
+		prefix = "-->"
+	}
+	if strings.HasPrefix(kind, "script-") {
+		prefix = "</script>"
+	}
+	if prefix != "" {
+		result = append(result, config.PayloadRule{Name: "上下文闭合", Kind: kind, Payload: prefix + `{{token}}<svg/onload=confirm("{{token}}")>`})
+	}
+	return result
+}
+
+func xssRequestEstimate(payloads []config.PayloadRule) int {
+	count := 1
+	for _, kind := range []string{"html-text", "attribute-single", "attribute-double", "attribute-unquoted", "tag", "script-single", "script-double", "script-template", "script-code", "script", "script-comment-line", "script-comment-block", "raw-script", "raw-style", "raw-textarea", "raw-title", "raw-xmp", "raw-noembed", "raw-noframes", "comment"} {
+		count += len(xssCandidates(payloads, kind))
+	}
+	return count
 }

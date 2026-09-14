@@ -44,3 +44,10 @@ func TestInformationalFindingScoreIsCapped(t *testing.T) {
 		t.Fatalf("blocked protection signal must not look like a confirmed vulnerability: %#v", finding)
 	}
 }
+
+func TestV39FirmEvidenceCannotBecomeConfirmedByScore(t *testing.T) {
+	finding := enrichFinding(model.Finding{PluginID: "sqli", Severity: model.SeverityHigh, Confidence: model.ConfidenceFirm, Evidence: []model.Evidence{{Strength: "L4"}, {Strength: "L4"}, {Strength: "L4"}, {Strength: "L4"}}})
+	if finding.Score < 85 || finding.Category == "确认漏洞" {
+		t.Fatalf("score changed oracle status: %+v", finding)
+	}
+}

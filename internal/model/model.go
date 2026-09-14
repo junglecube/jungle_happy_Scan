@@ -174,6 +174,7 @@ type ScanInput struct {
 	ClientTLS         *ClientTLSInput   `json:"client_tls,omitempty"`
 	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
+	Signature         *SignatureInput   `json:"signature,omitempty"`
 }
 
 // ClientTLSInput carries one request-scoped mutual-TLS identity. Certificate
@@ -185,6 +186,16 @@ type ClientTLSInput struct {
 	File       string `json:"file,omitempty"`
 	Password   string `json:"password,omitempty"`
 	Filename   string `json:"filename,omitempty"`
+}
+
+// SignatureInput carries an optional request-signing adapter. It is request
+// scoped and is never persisted as part of Config or task recovery state.
+type SignatureInput struct {
+	Mode      string `json:"mode"`               // http or local_js
+	Endpoint  string `json:"endpoint,omitempty"` // HTTP signer URL
+	Script    string `json:"script,omitempty"`   // server-side JS path
+	Runtime   string `json:"runtime,omitempty"`  // defaults to node
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
 }
 
 func (s ScanInput) ResolveScheme(defaultScheme string) (scheme string, auto bool, err error) {
@@ -229,15 +240,17 @@ func (s ScanInput) SelectedMode() string {
 }
 
 type Response struct {
-	StatusCode   int                 `json:"status_code"`
-	Headers      map[string]string   `json:"headers"`
-	HeaderValues map[string][]string `json:"header_values,omitempty"`
-	Body         []byte              `json:"-"`
-	Elapsed      time.Duration       `json:"-"`
-	URL          string              `json:"url"`
-	Charset      string              `json:"charset,omitempty"`
-	RawBytes     int64               `json:"raw_bytes,omitempty"`
-	Truncated    bool                `json:"truncated,omitempty"`
+	BusinessOutcome string              `json:"-"`
+	SentAt          time.Time           `json:"-"`
+	StatusCode      int                 `json:"status_code"`
+	Headers         map[string]string   `json:"headers"`
+	HeaderValues    map[string][]string `json:"header_values,omitempty"`
+	Body            []byte              `json:"-"`
+	Elapsed         time.Duration       `json:"-"`
+	URL             string              `json:"url"`
+	Charset         string              `json:"charset,omitempty"`
+	RawBytes        int64               `json:"raw_bytes,omitempty"`
+	Truncated       bool                `json:"truncated,omitempty"`
 }
 
 func (r Response) Text() string { return string(r.Body) }
@@ -295,16 +308,17 @@ type Progress struct {
 }
 
 type ScanView struct {
-	ScanID        string               `json:"scan_id"`
-	Status        string               `json:"status"`
-	CreatedAt     time.Time            `json:"created_at"`
-	StartedAt     *time.Time           `json:"started_at,omitempty"`
-	FinishedAt    *time.Time           `json:"finished_at,omitempty"`
-	ElapsedMS     int64                `json:"elapsed_ms"`
-	Progress      Progress             `json:"progress"`
-	FindingsCount int                  `json:"findings_count"`
-	Error         string               `json:"error,omitempty"`
-	Warnings      []string             `json:"warnings"`
-	Coverage      Coverage             `json:"coverage"`
-	Correlations  []FindingCorrelation `json:"correlations,omitempty"`
+	CallbackPending bool                 `json:"callback_pending"`
+	ScanID          string               `json:"scan_id"`
+	Status          string               `json:"status"`
+	CreatedAt       time.Time            `json:"created_at"`
+	StartedAt       *time.Time           `json:"started_at,omitempty"`
+	FinishedAt      *time.Time           `json:"finished_at,omitempty"`
+	ElapsedMS       int64                `json:"elapsed_ms"`
+	Progress        Progress             `json:"progress"`
+	FindingsCount   int                  `json:"findings_count"`
+	Error           string               `json:"error,omitempty"`
+	Warnings        []string             `json:"warnings"`
+	Coverage        Coverage             `json:"coverage"`
+	Correlations    []FindingCorrelation `json:"correlations,omitempty"`
 }

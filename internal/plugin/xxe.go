@@ -1,9 +1,11 @@
 package plugin
 
 import (
+	"encoding/xml"
+	"fmt"
+	"io"
 	"regexp"
 	"strings"
-	"time"
 
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
@@ -24,7 +26,7 @@ func (p XXE) Scan(ctx *Context) ([]model.Finding, error) {
 	return scanXXE(ctx, p.Meta())
 }
 
-func scanXXE(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
+func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, scanErr error) {
 	body := string(ctx.Request.Body)
 	if !strings.Contains(ctx.Request.ContentType(), "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") {
 		ctx.Progress(meta.ID, 1, 1)
@@ -52,11 +54,26 @@ func scanXXE(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
 	ctx.Progress(meta.ID, 0, max(total, 1))
 	type callbackProbe struct {
 		token, rule string
+		point       string
 		request     *httpraw.Request
 		response    model.Response
 	}
 	pending := make([]callbackProbe, 0)
-	var findings []model.Finding
+	defer func() {
+		byToken := map[string]callbackProbe{}
+		var tokens []string
+		for _, probe := range pending {
+			byToken[probe.token] = probe
+			tokens = append(tokens, probe.token)
+		}
+		findings = append(findings, settleOAST(ctx, tokens, func(token string, late bool) model.Finding {
+			probe := byToken[token]
+			return Finding(meta, "XXE 外部实体产生回连", model.SeverityHigh, model.ConfidenceCertain, probe.point,
+				"实体探针对应的唯一回连已收到；结合响应及请求证据复核 XML 处理链路。", "禁用外部实体并限制出站访问。",
+				[]model.Evidence{ctx.Evidence("收到唯一 XXE 回连", probe.request, &probe.response, map[string]any{"callback": true, "callback_token": token, "payload_rule": probe.rule, "late_callback": late, "evidence_strength": "L5"})}, "OWASP WSTG-INPV-07")
+		})...)
+	}()
+
 	done := 0
 	for _, point := range points {
 		for _, payload := range payloads {
@@ -72,12 +89,22 @@ func scanXXE(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
 			}
 			replacements := map[string]string{"root": root[1], "token": token, "callback": callbackURL}
 			mutatedValue := "&jungle_happy_scan;"
-			doctype := expandPayload(payload.Payload, replacements)
+			doctype := xmlDeclaration.ReplaceAllString(expandPayload(payload.Payload, replacements), "")
+			if payload.Kind == "inline" {
+				var encoded strings.Builder
+				for _, ch := range token {
+					fmt.Fprintf(&encoded, "&#%d;", ch)
+				}
+				doctype = strings.ReplaceAll(doctype, token, encoded.String())
+			}
 			if payload.Kind == "xinclude_file" {
 				mutatedValue = expandPayload(payload.Payload, replacements)
 				doctype = ""
 			}
 			mutated, err := ctx.Mutate(point, mutatedValue)
+			if point.Location == "xml_cdata" {
+				mutated, err = mutateXXECDATA(ctx.Request, point, mutatedValue)
+			}
 			if err != nil {
 				done++
 				ctx.Progress(meta.ID, done, total)
@@ -92,20 +119,28 @@ func scanXXE(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
 				document += doctype + "\n"
 			}
 			document += documentBody
+			if !validXXEDocument(document) {
+				ctx.ResolveMutationFailed(1)
+				done++
+				ctx.Progress(meta.ID, done, total)
+				continue
+			}
 			request := mutated.WithBody([]byte(document))
 			response, sendErr := ctx.Send(request)
+			if payload.Kind == "callback" {
+				pending = append(pending, callbackProbe{token: callbackToken, rule: payload.Name, point: point.Label(), request: request, response: response})
+			}
 			if sendErr != nil {
 				return findings, sendErr
 			}
 			done++
 			ctx.Progress(meta.ID, done, total)
 			if payload.Kind == "callback" {
-				pending = append(pending, callbackProbe{token: callbackToken, rule: payload.Name, request: request, response: response})
 				continue
 			}
 			expectedText := expandPayload(payload.Expected, replacements)
 			expected, compileErr := regexp.Compile(expectedText)
-			if compileErr != nil || !expected.Match(response.Body) || expected.Match(ctx.Baseline.Body) {
+			if expectedText == "" || compileErr != nil || !expected.Match(response.Body) || expected.Match(ctx.Baseline.Body) {
 				continue
 			}
 			severityValue, confidenceValue, title := model.SeverityHigh, model.ConfidenceFirm, "XML 解析器允许 DTD 实体展开"
@@ -118,19 +153,44 @@ func scanXXE(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
 				[]model.Evidence{ctx.Evidence("精确节点变异匹配 "+payload.Name, request, &response, map[string]any{"match": string(expected.Find(response.Body)), "payload_rule": payload.Name, "xml_point": point.Path, "evidence_strength": "L4"})}, "OWASP WSTG-INPV-07"))
 		}
 	}
-	tokens := make([]string, 0, len(pending))
-	for _, candidate := range pending {
-		tokens = append(tokens, candidate.token)
-	}
-	hits := waitCallbackBatch(ctx.Context, ctx.Callbacks, tokens, 8*time.Second)
-	for _, candidate := range pending {
-		if !hits[candidate.token] {
-			continue
-		}
-		findings = append(findings, Finding(meta, "XXE 外部实体产生离线回连", model.SeverityHigh, model.ConfidenceCertain, "body:xml",
-			"服务端 XML 解析器访问了配置 payload 中的唯一回连 URL。",
-			"禁用所有外部实体解析并限制应用服务器出站网络。",
-			[]model.Evidence{ctx.Evidence("收到唯一 XXE 回连 token", candidate.request, &candidate.response, map[string]any{"callback": true, "callback_token": candidate.token, "payload_rule": candidate.rule, "evidence_strength": "L5"})}, "OWASP WSTG-INPV-07"))
-	}
 	return findings, nil
+}
+
+// CDATA is a container, not an entity expansion sink: replace the chosen
+// container only, leaving identically-valued sibling nodes untouched.
+func mutateXXECDATA(request *httpraw.Request, point httpraw.InsertionPoint, value string) (*httpraw.Request, error) {
+	re := regexp.MustCompile(`(?s)<!\[CDATA\[.*?\]\]>`)
+	matches := re.FindAllIndex(request.Body, -1)
+	var index int
+	if _, err := fmt.Sscan(point.Path, &index); err != nil || index < 0 || index >= len(matches) {
+		return nil, fmt.Errorf("CDATA 插入点无效")
+	}
+	at := matches[index]
+	body := append([]byte(nil), request.Body[:at[0]]...)
+	body = append(body, []byte(value)...)
+	body = append(body, request.Body[at[1]:]...)
+	return request.WithBody(body), nil
+}
+func validXXEDocument(document string) bool {
+	decoder := xml.NewDecoder(strings.NewReader(document))
+	decoder.Strict = false
+	roots, depth := 0, 0
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return roots == 1 && depth == 0
+		}
+		if err != nil {
+			return false
+		}
+		switch token.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				roots++
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		}
+	}
 }

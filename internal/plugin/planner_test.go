@@ -100,10 +100,9 @@ func TestExecutionPlannerUsesRuntimeSQLCandidatesAndCohortQuanta(t *testing.T) {
 	rule.ParameterNames = nil // Runtime falls back to its canonical candidate names.
 	cfg.PluginRules["mybatis_dynamic_sql"] = rule
 	points := httpraw.DiscoverAdvanced(request, cfg)
-	selected, err := Select([]string{"mybatis_dynamic_sql", "sqli_order_by"}, "normal")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Internal subdetector planning still has to match its runtime candidate
+	// selection, although these are no longer standalone public plugins.
+	selected := []Plugin{MyBatisDynamicSQL{}, SQLOrderBy{}}
 	plans := BuildExecutionPlans(selected, request, points, "normal", cfg, 6)
 	if len(plans) != 2 {
 		t.Fatalf("unexpected plans: %#v", plans)
@@ -147,7 +146,7 @@ func TestExecutionPlannerIncludesCoreSQLQuoteGate(t *testing.T) {
 	}
 	payloads := payloadsForMode(cfg.PluginRules["sqli"], "normal")
 	pairs := len(pairPayloads(payloads, "error_break", "error_repair")) +
-		len(pairPayloads(payloads, "conditional_control", "conditional_error")) + 1
+		len(pairPayloads(payloads, "conditional_control", "conditional_error")) + len(normalSQLBooleanPair(pairPayloads(payloads, "boolean_true", "boolean_false"), points[0]))
 	want := pairs*4 + 1
 	if plans[0].EstimatedRequests != want {
 		t.Fatalf("SQL plan omitted the independent quote gate: got=%d want=%d", plans[0].EstimatedRequests, want)

@@ -400,6 +400,9 @@ func responsePatternMatches(response model.Response, pattern string) bool {
 }
 
 func LikelySuccess(response model.Response, cfg config.Config) bool {
+	if response.BusinessOutcome != "" {
+		return response.BusinessOutcome == string(Success)
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return false
 	}

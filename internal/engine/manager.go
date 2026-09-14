@@ -21,6 +21,7 @@ import (
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
 	"jungle_happy_Scan/internal/plugin"
+	"jungle_happy_Scan/internal/signing"
 	"jungle_happy_Scan/internal/transport"
 )
 
@@ -37,6 +38,7 @@ type ConnectivityResult struct {
 	AutoFallback                        bool
 	ElapsedMS                           int64
 	ClientCertificate                   *tls.Certificate
+	Signer                              signing.Signer
 	NetworkOK                           bool
 	AuthValid                           *bool
 	Reason                              string
@@ -72,9 +74,11 @@ type Task struct {
 	doneOnce          sync.Once
 	preflight         *ConnectivityResult
 	clientCertificate *tls.Certificate
+	signer            signing.Signer
 	expireCtx         context.Context
 	expireCancel      context.CancelFunc
 	lastProgressEvent time.Time
+	callbackObservers int
 }
 
 func (t *Task) ID() string { return t.id }
@@ -105,7 +109,7 @@ func (t *Task) viewLocked() model.ScanView {
 		coverage.Plugins[id] = item
 	}
 	return model.ScanView{
-		ScanID: t.id, Status: t.status, CreatedAt: t.createdAt, StartedAt: t.startedAt,
+		CallbackPending: t.callbackObservers > 0, ScanID: t.id, Status: t.status, CreatedAt: t.createdAt, StartedAt: t.startedAt,
 		FinishedAt: t.finishedAt, ElapsedMS: elapsed, Progress: progress,
 		FindingsCount: len(t.findings), Error: t.err, Warnings: append([]string(nil), t.warnings...),
 		Coverage: coverage, Correlations: append([]model.FindingCorrelation(nil), t.correlations...),
@@ -414,14 +418,18 @@ func (m *Manager) CheckConnectivity(ctx context.Context, input model.ScanInput) 
 	if err != nil {
 		return ConnectivityResult{}, err
 	}
-	client, err := transport.NewWithGovernorAndCertificate(cfg, transport.Hooks{}, m.governor, certificate)
+	signer, err := signing.New(input.Signature)
+	if err != nil {
+		return ConnectivityResult{}, err
+	}
+	client, err := transport.NewWithGovernorAndCertificateAndSigner(cfg, transport.Hooks{}, m.governor, certificate, signer)
 	if err != nil {
 		return ConnectivityResult{}, err
 	}
 	defer client.Close()
 	started := time.Now()
 	response, usedRequest, fellBack, err := client.SendWithSchemeFallback(ctx, request, automatic)
-	result := ConnectivityResult{Response: response, Request: usedRequest, AutoFallback: fellBack, ElapsedMS: time.Since(started).Milliseconds(), ClientCertificate: certificate}
+	result := ConnectivityResult{Response: response, Request: usedRequest, AutoFallback: fellBack, ElapsedMS: time.Since(started).Milliseconds(), ClientCertificate: certificate, Signer: signer}
 	if err != nil {
 		result.Reason = fmt.Sprintf("原始报文连通性检测失败: %s", transport.FriendlyError(err, cfg.TimeoutSeconds))
 		return result, errors.New(result.Reason)
@@ -572,6 +580,15 @@ func (m *Manager) create(input model.ScanInput, preflight *ConnectivityResult) (
 			return nil, err
 		}
 	}
+	var signer signing.Signer
+	if preflight != nil && preflight.Signer != nil {
+		signer = preflight.Signer
+	} else {
+		signer, err = signing.New(input.Signature)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	expireCtx, expireCancel := context.WithCancel(context.Background())
 	task := &Task{
@@ -584,6 +601,7 @@ func (m *Manager) create(input model.ScanInput, preflight *ConnectivityResult) (
 		findingKeys:       make(map[string]struct{}),
 		preflight:         preflight,
 		clientCertificate: certificate,
+		signer:            signer,
 		expireCtx:         expireCtx, expireCancel: expireCancel,
 	}
 	if preflight != nil && preflight.Request != nil {
@@ -690,8 +708,9 @@ func (m *Manager) run(task *Task, mode string) {
 	task.preflight = nil
 	task.mu.Unlock()
 	task.publishProgress(task.View(), true)
-	client, err := transport.NewWithGovernorAndCertificate(task.cfg, transport.Hooks{OnRequest: task.requestSent, OnError: task.networkError}, m.governor, task.clientCertificate)
+	client, err := transport.NewWithGovernorAndCertificateAndSigner(task.cfg, transport.Hooks{OnRequest: task.requestSent, OnError: task.networkError}, m.governor, task.clientCertificate, task.signer)
 	task.clientCertificate = nil
+	task.signer = nil
 	if err != nil {
 		m.finishFailed(task, err)
 		return
@@ -803,6 +822,35 @@ func (m *Manager) run(task *Task, mode string) {
 			return response, sendErr
 		}
 	}
+	sensitiveEnabled := false
+	for _, item := range task.plugins {
+		if item.Meta().ID == "sensitive_data" {
+			sensitiveEnabled = true
+		}
+	}
+	observeResponse := func(request *httpraw.Request, response model.Response) {
+		if !sensitiveEnabled {
+			return
+		}
+		passive := &plugin.Context{Context: task.ctx, Request: request, Baseline: response, Config: task.cfg, Progress: func(string, int, int) {}}
+		results, _ := (plugin.SensitiveData{}).Scan(passive)
+		var novel []model.Finding
+		for _, finding := range results {
+			if len(finding.Evidence) == 0 {
+				continue
+			}
+			marker, _ := finding.Evidence[0].Metrics["match"].(string)
+			if marker == "" || strings.Contains(representativeBaseline.Text(), marker) || strings.Contains(request.Raw(false), marker) {
+				continue
+			}
+			finding.Affected = "active response body"
+			finding.Description += " 此内容首次见于主动探针响应。"
+			novel = append(novel, finding)
+		}
+		if len(novel) > 0 {
+			task.addFindings(novel)
+		}
+	}
 	availableBudget := max(0, task.cfg.MaxRequests-baselineSamples)
 	plans := plugin.BuildExecutionPlans(task.plugins, task.request, points, mode, task.cfg, availableBudget)
 	allocatedBudget := 0
@@ -886,13 +934,16 @@ func (m *Manager) run(task *Task, mode string) {
 			return 0
 		}
 		ctx := &plugin.Context{
-			Context: task.ctx, Request: task.request, Baselines: baselines, Baseline: representativeBaseline,
+			ActivePluginID: meta.ID, Context: task.ctx, Request: task.request, Baselines: baselines, Baseline: representativeBaseline,
 			Points: points, Mode: mode, Config: task.cfg, Callbacks: m.callbacks,
-			SendFunc:      sendFunc,
-			Progress:      func(id string, completed, total int) { task.updatePlugin(id, meta.Name, completed, total) },
-			OnRequest:     func(used int) { task.requestProgress(meta.ID, meta.Name, used) },
-			OnResolution:  func(kind string, count int) { task.resolvePluginRequests(meta.ID, meta.Name, kind, count) },
-			RequestBudget: plan.Budget,
+			SendFunc:          sendFunc,
+			OnResponse:        observeResponse,
+			OnLateFindings:    func(items []model.Finding) { task.addFindings(items) },
+			OnCallbackPending: func(delta int) { task.mu.Lock(); task.callbackObservers += delta; task.mu.Unlock() },
+			Progress:          func(id string, completed, total int) { task.updatePlugin(id, meta.Name, completed, total) },
+			OnRequest:         func(used int) { task.requestProgress(meta.ID, meta.Name, used) },
+			OnResolution:      func(kind string, count int) { task.resolvePluginRequests(meta.ID, meta.Name, kind, count) },
+			RequestBudget:     plan.Budget,
 		}
 		findings, scanErr := item.Scan(ctx)
 		used, exhausted := ctx.BudgetState()
@@ -920,6 +971,10 @@ func (m *Manager) run(task *Task, mode string) {
 			if plan.EstimatedRequests > 0 {
 				coverage.PointsCompleted = min(plan.PointsTotal, int(float64(plan.PointsTotal)*float64(used)/float64(plan.EstimatedRequests)))
 			}
+			task.coverage.PluginsPartial++
+		} else if issues := ctx.CoverageIssues(); len(issues) > 0 {
+			coverage.Status = "partial"
+			coverage.Reason = strings.Join(issues, "；")
 			task.coverage.PluginsPartial++
 		} else if progressItem.MutationFailed > 0 || progressItem.BudgetSkipped > 0 {
 			coverage.Status = "partial"
@@ -1053,7 +1108,7 @@ func planStage(meta model.PluginMeta) int {
 
 func sqlOracleLane(id string) bool {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql":
 		return true
 	default:
 		return false

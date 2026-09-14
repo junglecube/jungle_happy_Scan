@@ -2,11 +2,16 @@ package engine
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -48,7 +53,7 @@ func TestRequestProgressUsesResolvedRequestSlots(t *testing.T) {
 }
 
 func TestSQLPluginsUseExclusiveOracleLane(t *testing.T) {
-	for _, id := range []string{"sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql"} {
+	for _, id := range []string{"sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql"} {
 		if !sqlOracleLane(id) {
 			t.Fatalf("%s was not assigned to the SQL oracle lane", id)
 		}
@@ -68,8 +73,9 @@ func TestSQLTimingExactReplacementDetectsQuotedQuery(t *testing.T) {
 		valuesMu.Lock()
 		values = append(values, value)
 		valuesMu.Unlock()
-		if value == "' AND (SELECT SLEEP(3)) AND '1'='1" {
-			time.Sleep(3 * time.Second)
+		if match := regexp.MustCompile(`^' AND \(SELECT SLEEP\(([0-9.]+)\)\) AND '1'='1$`).FindStringSubmatch(value); len(match) == 2 {
+			seconds, _ := strconv.ParseFloat(match[1], 64)
+			time.Sleep(time.Duration(seconds * float64(time.Second)))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
@@ -123,12 +129,73 @@ func TestSQLTimingExactReplacementDetectsQuotedQuery(t *testing.T) {
 		if value == "' AND (SELECT SLEEP(3)) AND '1'='1" {
 			seenExactPayload = true
 		}
-		if strings.HasPrefix(value, "original'") {
+		if strings.Contains(value, "SLEEP(") && strings.HasPrefix(value, "original'") {
 			t.Fatalf("timing payload incorrectly retained original value: %q", value)
 		}
 	}
 	if !seenExactPayload {
 		t.Fatalf("scanner never sent the verified timing payload: %#v", values)
+	}
+}
+
+func TestScanSignsRequestAfterMutationPipeline(t *testing.T) {
+	var signedRequests atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Signature") == "signed" {
+			signedRequests.Add(1)
+		}
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer target.Close()
+	signer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var envelope struct {
+			Request string `json:"request"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&envelope); err != nil {
+			http.Error(w, "bad json", http.StatusBadRequest)
+			return
+		}
+		raw, err := base64.StdEncoding.Strict().DecodeString(envelope.Request)
+		if err != nil {
+			http.Error(w, "bad base64", http.StatusBadRequest)
+			return
+		}
+		updated := strings.Replace(string(raw), "X-Signature: old", "X-Signature: signed", 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Request string `json:"request"`
+		}{Request: base64.StdEncoding.EncodeToString([]byte(updated))})
+	}))
+	defer signer.Close()
+	store, err := config.Open(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := store.Get()
+	cfg.BaselineSamples = 1
+	cfg.MaxRequests = 2
+	cfg.RequestsPerSecond = 500
+	parsed, _ := url.Parse(target.URL)
+	cfg.AllowedHosts = []string{parsed.Hostname()}
+	if err := store.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	callbacks := callback.New()
+	defer callbacks.Close()
+	manager := NewManager(store, callbacks)
+	raw := fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\nX-Signature: old\r\n\r\n", parsed.Host)
+	task, err := manager.Create(model.ScanInput{
+		HTTP: raw, ScanType: []string{"sensitive_data"}, Scheme: "http",
+		Signature: &model.SignatureInput{Mode: "http", Endpoint: signer.URL},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := task.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if task.View().Status != "completed" || signedRequests.Load() == 0 {
+		t.Fatalf("signed request was not sent: status=%s signed=%d error=%s", task.View().Status, signedRequests.Load(), task.View().Error)
 	}
 }
 

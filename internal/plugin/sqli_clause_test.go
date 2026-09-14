@@ -3,6 +3,8 @@ package plugin
 import (
 	"context"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -42,8 +44,8 @@ func TestSQLDoubleQuoteBooleanAndTiming(t *testing.T) {
 			response := baseline
 			response.Elapsed = 25 * time.Millisecond
 			parsed, _ := url.Parse(request.Target)
-			if strings.Contains(parsed.Query().Get("id"), `" AND SLEEP(2)`) {
-				response.Elapsed = 2200 * time.Millisecond
+			if strings.Contains(parsed.Query().Get("id"), `" AND SLEEP(`) {
+				response.Elapsed += fixtureSQLSleep(parsed.Query().Get("id"))
 			}
 			return response, nil
 		}
@@ -65,8 +67,8 @@ func TestSQLDoubleQuoteBooleanAndTiming(t *testing.T) {
 			response.Elapsed = 25 * time.Millisecond
 			parsed, _ := url.Parse(request.Target)
 			value := strings.ToLower(strings.ReplaceAll(parsed.Query().Get("query"), " ", ""))
-			if strings.Contains(value, "or(selectsleep(3))") {
-				response.Elapsed = 3300 * time.Millisecond
+			if strings.Contains(value, "or(selectsleep(") {
+				response.Elapsed += fixtureSQLSleep(value)
 			}
 			return response, nil
 		}
@@ -88,8 +90,8 @@ func TestSQLDoubleQuoteBooleanAndTiming(t *testing.T) {
 			response.Elapsed = 25 * time.Millisecond
 			parsed, _ := url.Parse(request.Target)
 			value := strings.ToLower(strings.ReplaceAll(parsed.Query().Get("query"), " ", ""))
-			if value == "'and(selectsleep(3))and'1'='1" {
-				response.Elapsed = 3300 * time.Millisecond
+			if strings.HasPrefix(value, "'and(selectsleep(") && strings.HasSuffix(value, "))and'1'='1") {
+				response.Elapsed += fixtureSQLSleep(value)
 			}
 			return response, nil
 		}
@@ -98,6 +100,17 @@ func TestSQLDoubleQuoteBooleanAndTiming(t *testing.T) {
 			t.Fatalf("query AND SELECT SLEEP timing pair was missed: err=%v findings=%+v", err, findings)
 		}
 	})
+}
+
+// The fixture models a delay function, not a special case for the scanner's
+// initial 3s literal, so independent confirmation doses exercise real behavior.
+func fixtureSQLSleep(value string) time.Duration {
+	match := regexp.MustCompile(`(?i)(?:pg_sleep|sleep)\(([0-9.]+)\)`).FindStringSubmatch(value)
+	if len(match) < 2 {
+		return 0
+	}
+	seconds, _ := strconv.ParseFloat(match[1], 64)
+	return time.Duration(seconds * float64(time.Second))
 }
 
 func TestSQLOrderByAndLimitContextPlugins(t *testing.T) {

@@ -169,6 +169,10 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !hasDuplicateCandidate && len(httpraw.SessionPoints(request, cfg.SessionIdentifiers)) == 0 {
 			return false, "没有可重复的参数或会话凭据"
 		}
+	case "unauthorized":
+		if unauthorizedPathAllowed(request, cfg.PluginRules[id].AllowPaths) {
+			return false, "路径在未授权扫描白名单中"
+		}
 	case "graphql_security", "graphql_alias_abuse":
 		if !strings.Contains(target, "graphql") && !strings.Contains(body, `"query"`) {
 			return false, "未识别为 GraphQL 请求"
@@ -201,7 +205,18 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if request.Method != "POST" && request.Method != "PUT" && request.Method != "PATCH" {
 			return false, "当前方法不适合 Method Override 探测"
 		}
-	case "file_read", "file_read_encoded", "ssrf", "open_redirect", "idor":
+	case "file_read", "file_read_encoded":
+		found := false
+		for _, point := range points {
+			if fileReadPoint(point, cfg.PluginRules[id].ParameterNames) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false, "没有文件路径候选参数"
+		}
+	case "ssrf", "open_redirect", "idor":
 		if !hasNamed(cfg.PluginRules[id].ParameterNames) {
 			return false, "没有匹配插件语义的参数"
 		}
@@ -228,7 +243,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !strings.Contains(contentType, "json") && !hasNamed([]string{"user", "username", "filter", "query", "search", "where", "id"}) {
 			return false, "没有 NoSQL 查询候选输入"
 		}
-	case "sqli", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
 		if !hasPoints {
 			return false, "没有可变异输入点"
 		}
@@ -239,6 +254,8 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 func estimateRequests(id string, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config) int {
 	count := max(estimatedPointCount(id, points, cfg), 1)
 	switch id {
+	case "sqli_deep":
+		return estimateSQLDeep(request, points, mode, cfg)
 	case "sqli":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
 		errorPairs := pairPayloads(payloads, "error_break", "error_repair")
@@ -247,24 +264,20 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		timePairs := pairPayloads(payloads, "time_control", "time_delay")
 		// The core plugin always runs its quote pair plus one value-appropriate
 		// Boolean pair. Extended and timing rules are separate plugin IDs.
-		booleanPairCount := 0
-		if len(booleanPairs) > 0 {
-			booleanPairCount = 1
+		total := 0
+		for _, point := range prioritizeSQLPoints(points) {
+			total += (len(errorPairs) + len(conditionalPairs) + len(normalSQLBooleanPair(booleanPairs, point))) * 4
+			if len(errorPairs) > 0 {
+				total++
+			}
 		}
-		// Every slot the runtime can either send or explicitly resolve must be in
-		// the plan. The quote gate often prunes most of these slots, but a positive
-		// gate can exercise the bounded dialect fallbacks.
-		paired := (len(errorPairs) + len(conditionalPairs) + booleanPairCount + len(timePairs)) * 4
-		gates := 0
-		if len(errorPairs) > 0 {
-			gates = 1
-		}
-		return count * (paired + gates)
+		_ = timePairs
+		return total
 	case "sqli_extended":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
-		return count * (len(pairPayloads(payloads, "error_break", "error_repair")) + len(pairPayloads(payloads, "boolean_true", "boolean_false"))) * 4
+		return count * (len(pairPayloads(payloads, "error_break", "error_repair")) + len(pairPayloads(payloads, "conditional_control", "conditional_error")) + len(pairPayloads(payloads, "boolean_true", "boolean_false"))) * 4
 	case "sqli_timing":
-		return count * len(pairPayloads(payloadsForMode(cfg.PluginRules[id], mode), "time_control", "time_delay")) * 4
+		return count * len(pairPayloads(payloadsForMode(cfg.PluginRules[id], mode), "time_control", "time_delay")) * 6
 	case "sqli_order_by":
 		payloads := payloadsForMode(cfg.PluginRules[id], mode)
 		conditionalPairs := pairPayloads(payloads, "conditional_control", "conditional_error")
@@ -289,7 +302,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "ldap_injection", "xpath_injection":
 		return count * 5
 	case "reflected_xss":
-		return count * max(1, len(cfg.PluginRules[id].Payloads))
+		return count * xssRequestEstimate(cfg.PluginRules[id].Payloads)
 	case "ssrf":
 		candidates := 0
 		for _, point := range points {
@@ -312,8 +325,8 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		return candidates * checks
 	case "file_read", "file_read_encoded", "open_redirect", "ssti", "crlf_injection":
 		multiplier := 1
-		if id == "file_read" {
-			multiplier = 2
+		if id == "file_read" || id == "file_read_encoded" {
+			multiplier = 3
 		} else if id == "ssti" {
 			multiplier = 2
 		}
@@ -349,7 +362,13 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		if !smsURLMatches(request, cfg.PluginRules[id].URLKeywords) {
 			return 0
 		}
-		return smsBatchSize * 2
+		n := 0
+		for _, point := range points {
+			if semanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
+				n++
+			}
+		}
+		return n * (cfg.SMS.Attempts + min(cfg.SMS.Attempts, len(payloadsByKind(cfg.PluginRules[id].Payloads, "spray_number"))))
 	case "json_polymorphic":
 		paths := len(jsonBindingPaths(request.Body, "@type"))
 		return max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*max(paths, 1)*3)
@@ -388,7 +407,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "unauthorized":
 		return 2
 	case "file_upload", "file_upload_execution":
-		return max(1, len(request.MultipartFiles())) * max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*2)
+		return max(1, len(request.MultipartFiles())) * max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*3)
 	case "cors":
 		return max(1, len(payloadsForMode(cfg.PluginRules[id], mode)))
 	case "api_exposure", "spring_actuator":
@@ -408,7 +427,26 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 
 func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.Config) int {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing":
+<<<<<<< HEAD
+	case "file_read", "file_read_encoded":
+		n := 0
+		for _, point := range points {
+			if fileReadPoint(point, cfg.PluginRules[id].ParameterNames) {
+				n++
+			}
+		}
+		return n
+	case "sms_abuse":
+		n := 0
+		for _, point := range points {
+			if semanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
+				n++
+			}
+		}
+		return n
+=======
+>>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing":
 		return len(prioritizeSQLPoints(points))
 	case "sqli_order_by", "sqli_limit":
 		return len(namedSQLContextPoints(points, cfg.PluginRules[id].ParameterNames))
@@ -444,7 +482,7 @@ func PlanBudgetQuantum(id string) int {
 
 func pluginPriority(id string) int {
 	switch id {
-	case "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "error_disclosure", "error_disclosure_extended", "file_read", "file_read_encoded", "unauthorized", "command_injection", "command_injection_oast", "command_injection_timing", "xxe", "xxe_extended", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "jwt_active", "proxy_trust_bypass":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "error_disclosure", "error_disclosure_extended", "file_read", "file_read_encoded", "unauthorized", "command_injection", "command_injection_oast", "command_injection_timing", "xxe", "xxe_extended", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "jwt_active", "proxy_trust_bypass":
 		return 4
 	case "reflected_xss", "nosql_injection", "ldap_injection", "xpath_injection", "cors", "crlf_injection", "path_normalization", "parameter_confusion":
 		return 3

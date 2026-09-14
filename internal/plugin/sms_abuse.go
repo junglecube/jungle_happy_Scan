@@ -30,12 +30,13 @@ type smsBatchResult struct {
 }
 
 func (SMSAbuse) Meta() model.PluginMeta {
-	return StandardMeta("sms_abuse", "短信轰炸/喷洒", "对手机号参数同步并发发送 30 次，以一分钟内返回成功超过 5 次判断短信轰炸和多号码喷洒。", "state-changing", true)
+	return StandardMeta("sms_abuse", "短信轰炸/喷洒", "按持久配置的次数、阈值和号码池检测短信频率限制，显式业务失败优先，记录实际发送时间。", "state-changing", true)
 }
 
 func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
 	rule := ctx.Rule(meta.ID)
+	attempts, threshold, window := ctx.Config.SMS.Attempts, ctx.Config.SMS.Threshold, time.Duration(ctx.Config.SMS.WindowSeconds)*time.Second
 	if !smsURLMatches(ctx.Request, rule.URLKeywords) {
 		ctx.Progress(meta.ID, 0, 0)
 		return nil, nil
@@ -48,7 +49,7 @@ func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 		}
 	}
 	sprayRules := payloadsByKind(payloadsForMode(rule, ctx.Mode), "spray_number")
-	totalPerPoint := smsBatchSize * 2
+	totalPerPoint := attempts + min(attempts, len(sprayRules))
 	total := len(points) * totalPerPoint
 	ctx.Progress(meta.ID, 0, max(total, 1))
 	var completed atomic.Int64
@@ -57,9 +58,10 @@ func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 		ctx.Progress(meta.ID, min(done, total), max(total, 1))
 	}
 	var findings []model.Finding
+	var batchErr error
 	for _, point := range points {
-		bombRequests := make([]*httpraw.Request, 0, smsBatchSize)
-		for range smsBatchSize {
+		bombRequests := make([]*httpraw.Request, 0, attempts)
+		for range attempts {
 			request, err := ctx.Mutate(point, point.Value)
 			if err == nil {
 				bombRequests = append(bombRequests, request)
@@ -68,14 +70,20 @@ func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 		started := time.Now()
 		bombResults := sendSMSBatch(ctx, bombRequests, nil, patterns, progress)
 		elapsed := time.Since(started)
+		for _, result := range bombResults {
+			if result.err != nil {
+				batchErr = result.err
+			}
+		}
+		smsCheckCoverage(ctx, bombResults, window, "同号码")
 		bombSuccess := successfulSMSResults(bombResults)
-		if len(bombSuccess) > smsThreshold && elapsed <= time.Minute {
+		if len(bombSuccess) > threshold && elapsed <= window {
 			findings = append(findings, Finding(meta, "短信接口缺少单号码发送频率限制", model.SeverityHigh, model.ConfidenceFirm, point.Label(),
-				"扫描器以同步屏障同时启动 30 个相同号码请求，其中返回成功超过 5 次，且整个批次在一分钟内完成。该结论依据响应语义，不声称真实短信一定到达。",
+				"扫描器按配置启动同号码请求，业务成功次数超过阈值且批次在配置窗口内完成；实际发送仍受传输层限速约束。该结论依据响应语义，不声称真实短信一定到达。",
 				"在服务端按手机号、账号、设备、来源 IP 和业务场景实施组合限流；使用原子计数器或集中式限流，超过阈值时返回明确拒绝并避免进入短信网关。",
 				smsEvidence(ctx, bombSuccess, "同号码高并发批次", map[string]any{
 					"requests": len(bombRequests), "successful_responses": len(bombSuccess),
-					"threshold": smsThreshold, "window_ms": elapsed.Milliseconds(), "concurrent": true,
+					"threshold": threshold, "window_ms": elapsed.Milliseconds(), "concurrent": true, "send_offsets_ms": smsSendOffsets(bombResults),
 				}), "CWE-799"))
 		}
 
@@ -83,24 +91,33 @@ func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 		started = time.Now()
 		sprayResults := sendSMSBatch(ctx, sprayRequests, sprayValues, patterns, progress)
 		elapsed = time.Since(started)
+		for _, result := range sprayResults {
+			if result.err != nil {
+				batchErr = result.err
+			}
+		}
+		smsCheckCoverage(ctx, sprayResults, window, "号码池")
+		if len(sprayRequests) > 0 && len(sprayRequests) <= threshold {
+			ctx.CoverageIssue("号码池数量不足以超过配置阈值，喷洒检测未完整执行")
+		}
 		spraySuccess := successfulSMSResults(sprayResults)
 		unique := make(map[string]bool)
 		for _, result := range spraySuccess {
 			unique[result.value] = true
 		}
-		if len(unique) > smsThreshold && elapsed <= time.Minute {
+		if len(unique) > threshold && elapsed <= window {
 			findings = append(findings, Finding(meta, "短信接口缺少多号码喷洒限制", model.SeverityHigh, model.ConfidenceFirm, point.Label(),
-				"扫描器高并发发送多个不同测试号码，一分钟内超过 5 个不同号码获得发送成功响应。该结论仅依据接口响应，不声称真实短信一定到达。",
+				"扫描器按配置号码池发送请求，在配置窗口内超过阈值个不同号码获得业务成功响应。该结论仅依据接口响应，不声称真实短信一定到达。",
 				"除单号码限流外，对账号、设备、IP、机构及业务场景设置滑动窗口总量；识别短时间多号码扩散，并在短信网关前统一阻断。",
 				smsEvidence(ctx, spraySuccess, "多号码高并发喷洒批次", map[string]any{
 					"requests": len(sprayRequests), "successful_responses": len(spraySuccess),
-					"unique_successful_numbers": len(unique), "threshold": smsThreshold,
-					"window_ms": elapsed.Milliseconds(), "concurrent": true,
+					"unique_successful_numbers": len(unique), "threshold": threshold,
+					"window_ms": elapsed.Milliseconds(), "concurrent": true, "send_offsets_ms": smsSendOffsets(sprayResults),
 				}), "CWE-799"))
 		}
 	}
 	ctx.Progress(meta.ID, max(int(completed.Load()), total), max(total, 1))
-	return findings, nil
+	return findings, batchErr
 }
 
 func smsURLMatches(request *httpraw.Request, keywords []string) bool {
@@ -153,13 +170,22 @@ func smsResponseSuccess(response model.Response, ctx *Context, patterns []compil
 	if response.StatusCode < 200 || response.StatusCode >= 300 || diff.LikelyAuthDenied(response, ctx.Config) {
 		return false
 	}
-	if smsStructuredSuccess(response.Body) {
+	result := diff.EvaluateBusiness(response, ctx.Config, "sms_abuse", ctx.Request.Target)
+	if result.Outcome == diff.Failure {
+		return false
+	}
+	if result.Outcome == diff.Success {
 		return true
 	}
-	if len(patterns) > 0 && firstPatternRule(patterns, response.Body).name != "" {
-		return true
+	for _, pattern := range patterns {
+		if json.Valid(response.Body) && pattern.rule.Pattern == defaultSMSOutcomePattern {
+			continue
+		}
+		if pattern.re.Match(response.Body) {
+			return true
+		}
 	}
-	return diff.LikelySuccess(response, ctx.Config)
+	return false
 }
 
 func smsStructuredSuccess(body []byte) bool {
@@ -232,7 +258,7 @@ func smsSprayRequests(ctx *Context, point httpraw.InsertionPoint, rules []config
 	var requests []*httpraw.Request
 	var values []string
 	for _, rule := range rules {
-		if len(requests) >= smsBatchSize {
+		if len(requests) >= ctx.Config.SMS.Attempts {
 			break
 		}
 		value := expandPayload(rule.Payload, map[string]string{"value": original, "prefix": prefix})
@@ -247,19 +273,7 @@ func smsSprayRequests(ctx *Context, point httpraw.InsertionPoint, rules []config
 		requests = append(requests, request)
 		values = append(values, value)
 	}
-	for index := 0; len(requests) < smsBatchSize && index < 100; index++ {
-		value := fmt.Sprintf("%s%04d", prefix, 7300+index)
-		if value == original || seen[value] {
-			continue
-		}
-		request, err := ctx.Mutate(point, value)
-		if err != nil {
-			continue
-		}
-		seen[value] = true
-		requests = append(requests, request)
-		values = append(values, value)
-	}
+
 	return requests, values
 }
 
@@ -276,3 +290,54 @@ func smsEvidence(ctx *Context, results []smsBatchResult, summary string, metrics
 	}
 	return evidence
 }
+
+func smsSendOffsets(results []smsBatchResult) []int64 {
+	var first time.Time
+	for _, result := range results {
+		at := result.response.SentAt
+		if !at.IsZero() && (first.IsZero() || at.Before(first)) {
+			first = at
+		}
+	}
+	var offsets []int64
+	for _, result := range results {
+		if !result.response.SentAt.IsZero() {
+			offsets = append(offsets, result.response.SentAt.Sub(first).Milliseconds())
+		}
+	}
+	return offsets
+}
+
+func smsCheckCoverage(ctx *Context, results []smsBatchResult, window time.Duration, label string) {
+	var first, last time.Time
+	known := 0
+	overlap := false
+	for i, result := range results {
+		at := result.response.SentAt
+		if at.IsZero() {
+			continue
+		}
+		known++
+		end := at.Add(result.response.Elapsed)
+		if first.IsZero() || at.Before(first) {
+			first = at
+		}
+		if end.After(last) {
+			last = end
+		}
+		for j := 0; j < i; j++ {
+			other := results[j].response
+			if !other.SentAt.IsZero() && at.Before(other.SentAt.Add(other.Elapsed)) && other.SentAt.Before(end) {
+				overlap = true
+			}
+		}
+	}
+	if known > 0 && last.Sub(first) > window {
+		ctx.CoverageIssue(label + "请求受限速或耗时影响，未在配置窗口内完成")
+	}
+	if known > 1 && !overlap {
+		ctx.CoverageIssue(label + "实际请求没有重叠，并发竞争场景覆盖不足")
+	}
+}
+
+var defaultSMSOutcomePattern = config.Default().PluginRules["sms_abuse"].Patterns[0].Pattern
