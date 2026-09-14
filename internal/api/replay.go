@@ -114,6 +114,10 @@ func (s *Server) createReplay(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "http 字段不能为空")
 		return
 	}
+	if err := s.resolveSignatureApp(&input.ScanInput); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if input.Concurrency == 0 {
 		input.Concurrency = 10
 	}

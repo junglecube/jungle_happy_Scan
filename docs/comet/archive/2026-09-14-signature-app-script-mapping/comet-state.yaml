@@ -1,0 +1,247 @@
+schema: comet.native.v4
+name: signature-app-script-mapping
+language: zh-CN
+phase: archive
+status: done
+state_version: 22
+brief: brief.md
+shape_confirmation_hash: f24cf4cd693203511ec27f7999721537ba46e7c73b5e788cb8c09c9ae6614b79
+spec_changes: []
+workspace:
+  isolation: worktree
+  change_branch: comet/signature-app-script-mapping
+  target_branch: main
+  finish: merge
+loop:
+  stage: done
+  goal_cycle: 2
+  iteration: 2
+  attempt: 2
+  retry_epoch: 1
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: GIVEN 固定脚本目录中存在 `FS_PMC.js`
+    result: passed
+    reason:
+      text: 固定配置目录仅枚举常规 .js 文件，测试创建并映射 FS_PMC.js。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: WHEN 任一支持签名的扫描入口收到 `"signature_app_name":"FS_PMC"`
+    result: passed
+    reason:
+      text: 所有既有签名入口和同步 Lite/非 Lite V1/V2 路由均已接入解析器。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "THEN 扫描器以该脚本和默认 Node 运行时重签每次变异后的请求。 Scenario: 旧签名对象保持可用"
+    result: passed
+    reason:
+      text: 映射生成默认 Node 的 local_js 签名器，签名在传输层每次发送前执行。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: GIVEN 调用方提供现有 `signature` 对象
+    result: passed
+    reason:
+      text: 旧 signature 字段与 HTTP/local_js 行为未变。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: WHEN 请求进入任一支持签名的入口
+    result: passed
+    reason:
+      text: 新字段转换为既有 SignatureInput 后沿用原有引擎/重放调用链。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "THEN 现有 HTTP 或本地脚本签名行为保持不变。 Scenario: 不明确或不安全的应用名被拒绝"
+    result: passed
+    reason:
+      text: 全量测试通过，旧 HTTP 签名端到端测试仍通过。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: WHEN 请求同时提供 `signature_app_name` 与 `signature`，或应用名不能安全映射到固定目录下的 `.js` 文件
+    result: passed
+    reason:
+      text: 混用、路径、缺失和大小写歧义均被拒绝，覆盖单测。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: THEN 接口返回 `400`，且不会执行目录外的脚本。
+    result: passed
+    reason:
+      text: 解析失败由全部 handler 转为 400，解析过程不执行目录外脚本。
+      truncated: false
+builder_handoff:
+  candidate_id: b0bc1a76-eb0c-4d8d-acb2-8516b30fbbee
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:cb323a34-8ebe-443a-8fed-9b29dd5914f3
+  iteration: 2
+  summary:
+    text: 按用户授权解决 17 个上游冲突文件中的已提交合并标记，统一保留 V3.9（HEAD）逻辑；新增 signature_app_name
+      连通性端到端测试，验证 fs_pmc 可映射 FS_PMC.js 并以 Node 执行。提交 4bb8de5。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  checks:
+    - name:
+        text: go test ./...
+        truncated: false
+      result: passed
+      note:
+        text: 全量 Go 测试通过。
+        truncated: false
+    - name:
+        text: go test ./internal/api -run
+          Test(ResolveSignatureApp|ConnectivityAcceptsSignatureAppName)$
+          -count=1
+        truncated: false
+      result: passed
+      note:
+        text: 解析器和大小写不敏感的连通性端到端签名测试通过。
+        truncated: false
+    - name:
+        text: git diff --check
+        truncated: false
+      result: passed
+      note:
+        text: 无空白错误，且无剩余冲突开始/结束标记。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 运行时端到端测试覆盖连通性；异步、爆破和各同步路由通过共享解析器的静态检查确认。
+      truncated: false
+  known_limits_truncated: false
+  review:
+    status: passed
+    summary:
+      text: 独立只读审查确认 A1-A8 所需映射、安全性、兼容性和路由接入均已实现；冲突解决一致选择 V3.9 逻辑，测试与 diff 检查均通过。
+      truncated: false
+    reviewer_execution_ref: /root/signature_mapping_final_review
+  submitted_at: 2026-09-14T08:22:58.201Z
+blockers: []
+verification:
+  candidate_id: b0bc1a76-eb0c-4d8d-acb2-8516b30fbbee
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:ee4fd1fb-db35-469d-a00c-f7ef03b5eb37
+  iteration: 2
+  attempt: 2
+  assurance: skill-coordinated
+  verdict: pass
+  checks: []
+  summary:
+    text: 最终独立复核通过：go test ./... 全绿，A1-A8 全部通过，无阻塞。
+    truncated: false
+  risks: []
+  risks_truncated: false
+  completed_at: 2026-09-14T08:37:06.428Z
+history:
+  - goal_cycle: 1
+    iteration: 0
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-09-14T08:05:22.800Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: blocked
+    unresolved_ids:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    summary:
+      text: 独立验证被仓库基线的冲突标记阻断。确认 d385a8c 未引入该阻断，静态实现符合范围，但所有验收均无法进行运行时验证。
+      truncated: false
+    completed_at: 2026-09-14T08:15:14.236Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 用户已授权修复上游已提交的合并冲突标记，以恢复编译并重新验证当前签名应用名改动。
+      truncated: false
+    completed_at: 2026-09-14T08:15:55.268Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 2
+    outcome: blocked
+    unresolved_ids:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+      - A6
+      - A7
+      - A8
+    summary:
+      text: 用户已授权但尚未实际修复上游冲突；必须返回 Build 完成冲突解决和端点验证。
+      truncated: false
+    completed_at: 2026-09-14T08:17:39.067Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 2
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 按用户授权返回 Build，实际修复上游已提交的冲突标记，并补充应用名签名入口的运行时验证。
+      truncated: false
+    completed_at: 2026-09-14T08:17:46.822Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Repair verification passed for A1, A2, A3, A4, A5, A6, A7, A8; final full
+        verification is required.
+      truncated: false
+    completed_at: 2026-09-14T08:25:02.309Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 2
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 最终独立复核通过：go test ./... 全绿，A1-A8 全部通过，无阻塞。
+      truncated: false
+    completed_at: 2026-09-14T08:37:06.428Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-09-14T07:36:56.399Z

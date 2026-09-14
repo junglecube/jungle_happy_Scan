@@ -93,6 +93,8 @@ HTTP 签名接口使用 `POST` 和 `application/json`：请求体为 `{"request"
 
 本地脚本按 `node F-PMC.js -request <base64请求>` 调用，并从标准输出返回 Base64 报文。脚本上传接口为 `POST /api/v1/signature-files`，使用 `multipart/form-data` 的 `file` 字段，仅支持 `.js`，最大 2 MiB。`signature` 可用于异步扫描、爆破、连通性测试，以及 `jungle_happy_scan`/Lite/V2 同步接口。
 
+对智能体或简化调用方，所有上述入口也支持 `signature_app_name`。它只接受应用名，例如 `"signature_app_name":"FS_PMC"`，服务端会在固定目录 `config/signature_scripts` 中选择 `FS_PMC.js` 并以默认 `node` 运行时执行。应用名与脚本基名匹配时不区分大小写；若目录内存在多个仅大小写不同的候选脚本，接口返回 `400` 避免选错。`signature_app_name` 不能包含路径，且不能与旧 `signature` 对象同时传入；旧对象调用格式继续兼容。
+
 任务热摘要保存在当前进程内，完整接口快照异步保存到本地恢复目录；进程重启后可查看恢复任务，但代理不会自动重新监听。明确删除任务时，内存数据与对应恢复目录一起删除。V3 API 不替代下面的 V2 稳定同步接口。
 
 ## V2 稳定同步接口（新调用方推荐）
@@ -231,6 +233,7 @@ V1.3 的任务对象还包含：
 - `host`：可选的域名到 IP 映射对象，例如 `{"test.icbc.com":"122.223.22.22"}`。连接使用指定 IP，但原始 Host Header 和 HTTPS TLS SNI 仍保留域名；不修改系统 hosts，也不执行外部 DNS。该参数不能与显式 HTTP 代理同时使用。
 - `client_tls_file`：可选，扫描器服务器上 PEM/PFX/P12 文件的绝对路径。前端上传文件后会返回并使用该路径，服务器保存时保留原文件名。
 - `client_tls_password`：可选，PFX/P12 密码；PEM 不使用此字段。密码只存在于当前请求和扫描所需内存中。
+- `signature_app_name`：可选，固定签名脚本目录中的应用名，例如 `"FS_PMC"` 会选择 `FS_PMC.js`。匹配不区分大小写；脚本不存在或存在多个仅大小写不同的候选时返回 `400`。不能与 `signature` 同时提供。
 
 不接受 `mode`、`scan_mode`、`plugins` 等额外字段；传入会返回 `400`。该接口在内部创建任务、等待扫描到达终态，然后一次性返回最终状态和漏洞数组，不需要调用方再轮询进度接口。
 

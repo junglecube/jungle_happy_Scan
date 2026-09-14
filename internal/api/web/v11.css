@@ -448,18 +448,10 @@ body {
 .rule-textarea:focus { border-color: #72a787; box-shadow: 0 0 0 3px rgba(24,115,74,.08); }
 .card-help code { padding: 2px 5px; border-radius: 4px; background: var(--amber-soft); color: #704b04; }
 
-<<<<<<< HEAD
 /* Persistent settings: one readable card per row on the desktop layout. */
 .settings-grid { grid-template-columns: 1fr; gap: 14px; align-items: start; }
 .settings-grid > .settings-card:not(.full-card) { grid-column: 1 / -1; min-width: 0; padding: 18px; }
 .settings-card { padding: 20px; border-color: #d9e4dc; background: rgba(255,255,255,.98); }
-=======
-/* Persistent settings: keep cards aligned and make dense rule editing easier
-   to scan without changing the underlying configuration model. */
-.settings-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; align-items: start; }
-.settings-grid > .settings-card:not(.full-card) { grid-column: span 6; min-width: 0; }
-.settings-card { padding: 24px; border-color: #d9e4dc; background: rgba(255,255,255,.98); }
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 .settings-card .panel-heading { margin-bottom: 15px; padding-bottom: 13px; border-bottom: 1px solid #e7eee9; }
 .settings-card .panel-heading h2 { letter-spacing: .1px; }
 .settings-card .card-help { max-width: 92ch; line-height: 1.65; }
@@ -473,7 +465,6 @@ body {
 .rule-grid .rule-textarea { min-height: 92px; }
 .rule-grid .json-editor { min-height: 290px; }
 
-<<<<<<< HEAD
 .business-keyword-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .business-keyword { display: flex; flex-direction: column; gap: 6px; padding: 13px; border: 1px solid #d9e4dc; border-radius: 11px; }
 .business-keyword > span { font-weight: 800; }
@@ -491,13 +482,6 @@ body {
 
 @media(max-width:650px){ .business-keyword-grid { grid-template-columns: 1fr; } }
 
-=======
-@media(max-width:1000px){
-  .settings-grid { grid-template-columns: 1fr; }
-  .settings-grid > .settings-card:not(.full-card) { grid-column: auto; }
-}
-
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 .evidence-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 9px; }
 .evidence-block { min-width: 0; }
 .evidence-label { display: block; margin-bottom: 5px; color: #6f8177; font-size: 9px; font-weight: 850; letter-spacing: .8px; }

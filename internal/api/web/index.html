@@ -4,27 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
-<<<<<<< HEAD
   <title>jungle_happy_Scan · V3.9.0</title>
   <link rel="stylesheet" href="/styles.css?v=3.9.0">
   <link rel="stylesheet" href="/v11.css?v=3.9.0-settings2">
   <link rel="stylesheet" href="/webscan.css?v=3.9.0">
-=======
-  <title>jungle_happy_Scan · V3.8.3</title>
-  <link rel="stylesheet" href="/styles.css?v=3.8.3">
-  <link rel="stylesheet" href="/v11.css?v=3.8.3">
-  <link rel="stylesheet" href="/webscan.css?v=3.8.3">
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
-<<<<<<< HEAD
       <span><strong>jungle_happy_Scan</strong><small>V3.9.0</small></span>
-=======
-      <span><strong>jungle_happy_Scan</strong><small>V3.8.3</small></span>
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
     </a>
     <nav aria-label="主导航">
       <button class="nav-button active" data-view="proxy">代理设置</button>
@@ -346,32 +335,10 @@
 	              <label class="full">LDAP/JNDI 最大并发连接（修改后需重启）<input id="cfg-callback-max-connections" type="number" min="1" max="4096"></label>
             </div>
 	            <p class="card-help">HTTP 回连默认监听 61166，LDAP/JNDI 安全接收器默认监听 61167；基础地址应填写目标服务器能够访问的扫描器 IP 或域名。两类监听器只接收一次性 Token，LDAP 端不返回远程类或对象。</p>
-<<<<<<< HEAD
 	          <div class="form-grid"><label>回连同步等待（秒）<input id="cfg-callback-wait" type="number" min="0" max="60"></label><label>迟到回连补报窗口（秒，0 关闭）<input id="cfg-callback-late" type="number" min="0" max="600"></label></div></section>
 <section class="panel settings-card">
 	            <div class="panel-heading"><div><h2>响应语义</h2></div></div>
             <p class="card-help">按“包含关键词”判断业务结果，每行填写一个词或短语即可。成功和失败同时命中时，以失败为准；未命中时保持未知，不会把 HTTP 200 自动当作业务成功。</p>
-=======
-	          </section>
-
-          <section class="panel settings-card full-card rule-editor-card">
-            <div class="panel-heading"><div><span class="step">G</span><h2>插件 Payload 与检测规则</h2></div><span class="rule-status" id="rule-status">读取中</span></div>
-            <p class="card-help">选择插件后直接编辑。Payload 支持占位符 <code>{{value}}</code>、<code>{{token}}</code>、<code>{{host}}</code>、<code>{{callback}}</code>、<code>{{root}}</code>；新增项保持相同 JSON 字段即可。保存配置后新扫描立即生效。</p>
-            <div class="rule-toolbar"><label>漏洞插件<select id="cfg-rule-plugin"></select></label><button type="button" class="text-button" id="format-rule-json">格式化 JSON</button></div>
-            <div class="rule-grid">
-              <label>参数名（每行一个）<textarea class="rule-textarea small" id="cfg-rule-parameters"></textarea></label>
-              <label>URL 关键字（每行一个）<textarea class="rule-textarea small" id="cfg-rule-url-keywords"></textarea></label>
-              <label>同源探测路径（每行一个）<textarea class="rule-textarea small" id="cfg-rule-paths"></textarea></label>
-              <label class="full rule-allowlist-field">未授权扫描白名单（每行一个路径片段）<textarea class="rule-textarea small" id="cfg-rule-allow-paths" placeholder="login&#10;checkHealth"></textarea><small>仅对“未授权访问”插件生效；大小写不敏感，按路径片段模糊匹配并忽略查询参数。例如 login 可匹配 /api/login、/api2/Login/。白名单接口将不会执行未授权检测。</small></label>
-              <label>Payload JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-payloads" spellcheck="false"></textarea></label>
-              <label>检测正则 JSON 数组<textarea class="rule-textarea json-editor" id="cfg-rule-patterns" spellcheck="false"></textarea></label>
-            </div>
-          </section>
-
-	          <section class="panel settings-card">
-	            <div class="panel-heading"><div><span class="step">F</span><h2>响应语义</h2></div></div>
-            <p class="card-help">登录/授权失败正则同时用于未授权插件和 jungle_happy_scan/lite 同步接口的扫描前鉴权预检；每行填写一条 RE2 正则，匹配响应状态行或 Body。401/403 无需配置。动态响应归一化正则仅用于扫描器内部的响应相似度比较：时间戳、requestId、traceId、nonce 等每次变化的内容会先替换为统一占位符，从而降低动态接口误报；不会修改或保存目标的真实响应。</p>
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
             <div class="form-grid">
               <div class="business-keyword-grid">
                 <label class="business-keyword success-keywords"><span>业务成功关键词</span><small>例如：处理成功、发送成功、code=000000</small><textarea class="mini-textarea" id="cfg-business-success" spellcheck="false" placeholder="发送成功&#10;处理成功&#10;code=000000"></textarea></label>
@@ -412,18 +379,13 @@
       </div>
 
       <div class="release-summary panel">
-<<<<<<< HEAD
         <div><span>当前版本</span><strong>V3.9.0</strong></div>
-=======
-        <div><span>当前版本</span><strong>V3.8.3</strong></div>
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
 	        <div><span>漏洞插件</span><strong>48 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
       </div>
 
 	      <div class="release-timeline">
-<<<<<<< HEAD
         <article class="release-entry">
           <div class="release-marker"><span></span></div>
           <div class="release-content panel">
@@ -436,12 +398,6 @@
           <div class="release-marker"><span></span></div>
           <div class="release-content panel">
             <header><div><span class="release-tag">PREVIOUS</span><h2>V3.8.3</h2></div><time datetime="2026-09-11">2026-09-11</time></header>
-=======
-        <article class="release-card current">
-          <div class="release-marker"><span></span></div>
-          <div class="release-content panel">
-            <header><div><span class="release-tag">CURRENT</span><h2>V3.8.3</h2></div><time datetime="2026-09-11">2026-09-11</time></header>
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
             <p class="release-lead">应用签名 HTTP 接口统一为 JSON request 协议，并修复 Linux 下 preSign.py 调用现有 Node.js 脚本的兼容性。</p>
             <div class="architecture-flow webscan-release-flow" aria-label="V3.8.3 签名适配流程">
               <span>JSON request</span><b>→</b><span>Node.js 脚本</span><b>→</b><span>JSON request</span><b>→</b><span>原始 HTTP</span>
@@ -1170,14 +1126,8 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-<<<<<<< HEAD
   <script src="/codemirror.js?v=3.9.0" defer></script>
   <script src="/app.js?v=3.9.0-settings2" defer></script>
   <script src="/webscan.js?v=3.9.0" defer></script>
-=======
-  <script src="/codemirror.js?v=3.8.3" defer></script>
-  <script src="/app.js?v=3.8.3" defer></script>
-  <script src="/webscan.js?v=3.8.3" defer></script>
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 </body>
 </html>

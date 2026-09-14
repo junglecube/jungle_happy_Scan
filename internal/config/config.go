@@ -15,11 +15,7 @@ import (
 	"sync"
 )
 
-<<<<<<< HEAD
 const currentConfigVersion = 33
-=======
-const currentConfigVersion = 32
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 
 type SessionIdentifier struct {
 	Location string `json:"location"`
@@ -186,12 +182,8 @@ type Config struct {
 func Default() Config {
 	return Config{
 		ConfigVersion: currentConfigVersion,
-<<<<<<< HEAD
 		BusinessRules: []BusinessRule{}, SMS: SMSConfig{Attempts: 30, Threshold: 5, WindowSeconds: 60}, CallbackWaitSeconds: 8, CallbackLateSeconds: 120,
 		Listen: "0.0.0.0:8888", DefaultScheme: "https", ScanMode: "standard",
-=======
-		Listen:        "0.0.0.0:8888", DefaultScheme: "https", ScanMode: "standard",
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 		NormalPlugins:  []string{"sqli", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"},
 		TimeoutSeconds: 10, MaxConcurrency: 8, MaxActiveScans: 4, RequestsPerSecond: 10,
 		MaxQueuedScans: 32, GlobalMaxConcurrency: 32, PerHostConcurrency: 12, GlobalRequestsPerSecond: 40,
@@ -1312,10 +1304,7 @@ func upgradeConfig(cfg *Config) {
 	cfg.RedactEvidence = false
 	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
 	repairSQLTimingControls(cfg.PluginRules)
-<<<<<<< HEAD
 	upgradeV39(cfg)
-=======
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	cfg.ConfigVersion = currentConfigVersion
 }
 

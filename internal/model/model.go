@@ -175,6 +175,7 @@ type ScanInput struct {
 	ClientTLSFile     string            `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string            `json:"client_tls_password,omitempty"`
 	Signature         *SignatureInput   `json:"signature,omitempty"`
+	SignatureAppName  string            `json:"signature_app_name,omitempty"`
 }
 
 // ClientTLSInput carries one request-scoped mutual-TLS identity. Certificate

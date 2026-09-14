@@ -531,6 +531,50 @@ func (s *Server) uploadSignatureFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"signature_script": target, "filename": originalName})
 }
 
+// resolveSignatureApp converts the concise public application name into the
+// existing local-JS signer configuration. The application name is never used
+// as a path: it only selects a regular .js file already present in the fixed
+// signature directory.
+func (s *Server) resolveSignatureApp(input *model.ScanInput) error {
+	name := strings.TrimSpace(input.SignatureAppName)
+	if name == "" {
+		return nil
+	}
+	if input.Signature != nil {
+		return errors.New("signature_app_name 与 signature 不能同时提供")
+	}
+	if strings.ContainsAny(name, "/\\\x00") || name == "." || name == ".." {
+		return errors.New("signature_app_name 必须是应用名，不能包含路径")
+	}
+	entries, err := os.ReadDir(s.signatureDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("未找到签名应用 %q", name)
+		}
+		return fmt.Errorf("读取签名脚本目录失败: %w", err)
+	}
+	var matches []string
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || filepath.Ext(entry.Name()) != ".js" {
+			continue
+		}
+		base := strings.TrimSuffix(entry.Name(), ".js")
+		if strings.EqualFold(base, name) {
+			matches = append(matches, entry.Name())
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return fmt.Errorf("未找到签名应用 %q", name)
+	case 1:
+		input.Signature = &model.SignatureInput{Mode: "local_js", Script: filepath.Join(s.signatureDir, matches[0])}
+		return nil
+	default:
+		sort.Strings(matches)
+		return fmt.Errorf("签名应用 %q 匹配多个脚本: %s", name, strings.Join(matches, ", "))
+	}
+}
+
 // CallbackHandler exposes only the one-time callback endpoint on the dedicated
 // listener. Scanner management and scan creation APIs remain on the main port.
 func (s *Server) CallbackHandler() http.Handler {
@@ -704,6 +748,10 @@ func (s *Server) parse(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := s.resolveSignatureApp(&input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	cfg := s.store.Get()
 	scheme, autoScheme, err := input.ResolveScheme(cfg.DefaultScheme)
 	if err != nil {
@@ -731,6 +779,10 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := s.resolveSignatureApp(&input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	preview, err := s.manager.Plan(input)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -742,6 +794,10 @@ func (s *Server) plan(w http.ResponseWriter, r *http.Request) {
 func (s *Server) connectivity(w http.ResponseWriter, r *http.Request) {
 	var input model.ScanInput
 	if err := decodeJSON(w, r, &input, 6_000_000); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.resolveSignatureApp(&input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -838,6 +894,10 @@ func (s *Server) createScan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := s.resolveSignatureApp(&input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	task, err := s.manager.Create(input)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -876,6 +936,10 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	}
 	input, err := external.scanInput(s.store.Get().NormalPlugins)
 	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.resolveSignatureApp(&input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1161,6 +1225,7 @@ type jungleHappyScanInput struct {
 	ClientTLSFile     string                `json:"client_tls_file,omitempty"`
 	ClientTLSPassword string                `json:"client_tls_password,omitempty"`
 	Signature         *model.SignatureInput `json:"signature,omitempty"`
+	SignatureAppName  string                `json:"signature_app_name,omitempty"`
 }
 
 func (input jungleHappyScanInput) originalResponse() (model.Response, bool, error) {
@@ -1197,7 +1262,7 @@ func (input jungleHappyScanInput) scanInput(configuredNormal ...[]string) (model
 	if scheme == "" {
 		scheme = "auto"
 	}
-	result := model.ScanInput{HTTP: rawHTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Signature: input.Signature, Mode: "standard"}
+	result := model.ScanInput{HTTP: rawHTTP, ScanType: append([]string(nil), input.ScanType...), Scheme: scheme, Host: cloneHostOverrides(input.Host), ClientTLSFile: input.ClientTLSFile, ClientTLSPassword: input.ClientTLSPassword, Signature: input.Signature, SignatureAppName: input.SignatureAppName, Mode: "standard"}
 	if len(input.ScanType) == 1 {
 		preset := strings.ToLower(strings.TrimSpace(input.ScanType[0]))
 		if preset == "passive" || preset == "normal" || preset == "deep" {

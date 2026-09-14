@@ -427,7 +427,6 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 
 func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.Config) int {
 	switch id {
-<<<<<<< HEAD
 	case "file_read", "file_read_encoded":
 		n := 0
 		for _, point := range points {
@@ -444,8 +443,6 @@ func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.
 			}
 		}
 		return n
-=======
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing":
 		return len(prioritizeSQLPoints(points))
 	case "sqli_order_by", "sqli_limit":
