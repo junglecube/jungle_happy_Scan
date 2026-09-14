@@ -96,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /readyz", s.health)
 	mux.HandleFunc("GET /api/v1/plugins", s.plugins)
 	mux.HandleFunc("GET /api/v2/plugins", s.pluginsV2)
+	mux.HandleFunc("GET /api/v2/signature-applications", s.signatureApplications)
 	mux.HandleFunc("GET /api/v1/config", s.getConfig)
 	mux.HandleFunc("PUT /api/v1/config", s.putConfig)
 	mux.HandleFunc("POST /api/v1/parse", s.parse)
@@ -573,6 +574,44 @@ func (s *Server) resolveSignatureApp(input *model.ScanInput) error {
 		sort.Strings(matches)
 		return fmt.Errorf("签名应用 %q 匹配多个脚本: %s", name, strings.Join(matches, ", "))
 	}
+}
+
+// signatureApplications exposes the safe, unambiguous application names that
+// can be selected through signature_app_name. Script paths and contents are
+// intentionally never returned.
+func (s *Server) signatureApplications(w http.ResponseWriter, _ *http.Request) {
+	entries, err := os.ReadDir(s.signatureDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "items": []any{}})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "读取签名脚本目录失败")
+		return
+	}
+	type signatureApplication struct {
+		AppName string `json:"app_name"`
+	}
+	byName := make(map[string][]string)
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || filepath.Ext(entry.Name()) != ".js" {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), ".js")
+		if name == "" || strings.ContainsAny(name, "/\\\x00") || name == "." || name == ".." {
+			continue
+		}
+		key := strings.ToLower(name)
+		byName[key] = append(byName[key], name)
+	}
+	items := make([]signatureApplication, 0, len(byName))
+	for _, names := range byName {
+		if len(names) == 1 {
+			items = append(items, signatureApplication{AppName: names[0]})
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].AppName < items[j].AppName })
+	writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "items": items})
 }
 
 // CallbackHandler exposes only the one-time callback endpoint on the dedicated

@@ -81,6 +81,33 @@ func TestResolveSignatureApp(t *testing.T) {
 	}
 }
 
+func TestSignatureApplicationsListsOnlySafeUnambiguousNames(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"FS-PMC.js", "F-ORDER.js", "README.txt", "fs-pmc.js"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("// test"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	server := &Server{signatureDir: dir}
+	recorder := httptest.NewRecorder()
+	server.signatureApplications(recorder, httptest.NewRequest(http.MethodGet, "/api/v2/signature-applications", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	var result struct {
+		APIVersion string `json:"api_version"`
+		Items      []struct {
+			AppName string `json:"app_name"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.APIVersion != "2.0" || len(result.Items) != 1 || result.Items[0].AppName != "F-ORDER" {
+		t.Fatalf("unexpected signature applications: %#v", result)
+	}
+}
+
 func TestConnectivityAcceptsSignatureAppName(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
 	defer target.Close()
