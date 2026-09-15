@@ -23,6 +23,17 @@ type BusinessResult struct {
 	Rule    string
 }
 
+// IsBusinessFailure reports whether a response is explicitly classified as a
+// business failure by the shared response semantics.  A response with an
+// unknown outcome is deliberately not considered a failure so callers do not
+// suppress detections merely because no business rule matched.
+func IsBusinessFailure(r model.Response, cfg config.Config, pluginID, target string) bool {
+	if r.BusinessOutcome == string(Failure) {
+		return true
+	}
+	return EvaluateBusiness(r, cfg, pluginID, target).Outcome == Failure
+}
+
 // EvaluateBusiness never treats transport success as business success. Explicit
 // failure (including a scoped custom rule) wins across all matched rules.
 func EvaluateBusiness(r model.Response, cfg config.Config, pluginID, target string) BusinessResult {

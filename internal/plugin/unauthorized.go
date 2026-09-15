@@ -26,6 +26,14 @@ func (p Unauthorized) Scan(ctx *Context) ([]model.Finding, error) {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
 	}
+	// A 2xx transport response can still be an explicit business failure (for
+	// example, {"code":500,"message":"未知异常，请联系管理员"}). Such a
+	// response is not evidence that an anonymous caller reached the protected
+	// business operation, so skip the authorization check for it.
+	if diff.IsBusinessFailure(ctx.Baseline, ctx.Config, meta.ID, ctx.Request.Target) {
+		ctx.Progress(meta.ID, 1, 1)
+		return nil, nil
+	}
 	identifiers := httpraw.EffectiveSessionIdentifiers(ctx.Request, ctx.Config.SessionIdentifiers)
 	anonymous, removed := httpraw.RemoveSessions(ctx.Request, identifiers)
 	if len(removed) == 0 {
@@ -60,6 +68,10 @@ func (p Unauthorized) Scan(ctx *Context) ([]model.Finding, error) {
 	noSimilarity := diff.Similarity(ctx.Baseline, noSession, ctx.Config)
 	badSimilarity := diff.Similarity(ctx.Baseline, badSession, ctx.Config)
 	if diff.LikelyAuthDenied(noSession, ctx.Config) || diff.LikelyAuthDenied(badSession, ctx.Config) {
+		return nil, nil
+	}
+	if diff.IsBusinessFailure(noSession, ctx.Config, meta.ID, ctx.Request.Target) ||
+		diff.IsBusinessFailure(badSession, ctx.Config, meta.ID, ctx.Request.Target) {
 		return nil, nil
 	}
 	if noSimilarity < 0.90 || badSimilarity < 0.85 {

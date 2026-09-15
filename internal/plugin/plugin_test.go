@@ -23,6 +23,38 @@ func TestRequestedPluginDetections(t *testing.T) {
 		assertFinding(t, findings, err, "unauthorized")
 	})
 
+	t.Run("unauthorized-skips-explicit-business-failure", func(t *testing.T) {
+		ctx := testContext(t, "GET /private HTTP/1.1\r\nHost: bank.test\r\nCookie: JSESSIONID=secret\r\n\r\n", model.Response{StatusCode: 200, Headers: jsonHeader(), Body: []byte(`{"code":0,"message":"成功","data":{"balance":100}}`)})
+		ctx.Config.AuthorizationExpected = true
+		ctx.Config.BusinessRules = []config.BusinessRule{{
+			Name: "业务失败关键词", Pattern: `未知异常，请联系管理员`, Outcome: "failure",
+		}}
+		ctx.SendFunc = func(context.Context, *httpraw.Request) (model.Response, error) {
+			// The server keeps HTTP 200 but returns a business failure message
+			// after the session is removed or replaced with an invalid value.
+			return model.Response{StatusCode: 200, Headers: jsonHeader(), Body: []byte(`{"code":0,"message":"未知异常，请联系管理员"}`)}, nil
+		}
+		findings, err := (Unauthorized{}).Scan(ctx)
+		if err != nil || len(findings) != 0 {
+			t.Fatalf("business failure response must not be reported as unauthorized: findings=%#v err=%v", findings, err)
+		}
+	})
+
+	t.Run("unauthorized-skips-structured-business-failure-baseline", func(t *testing.T) {
+		ctx := testContext(t, "GET /private HTTP/1.1\r\nHost: bank.test\r\nCookie: JSESSIONID=secret\r\n\r\n", model.Response{
+			StatusCode: 200, Headers: jsonHeader(), Body: []byte(`{"code":500,"message":"未知异常，请联系管理员"}`),
+		})
+		ctx.Config.AuthorizationExpected = true
+		ctx.SendFunc = func(context.Context, *httpraw.Request) (model.Response, error) {
+			t.Fatal("business-failure baseline should stop unauthorized probing")
+			return model.Response{}, nil
+		}
+		findings, err := (Unauthorized{}).Scan(ctx)
+		if err != nil || len(findings) != 0 {
+			t.Fatalf("structured business failure must not be reported as unauthorized: findings=%#v err=%v", findings, err)
+		}
+	})
+
 	t.Run("unauthorized-removes-custom-session-before-cookie-conclusion", func(t *testing.T) {
 		ctx := testContext(t, "GET /private HTTP/1.1\r\nHost: bank.test\r\nCookie: theme=dark\r\ndesSessionId: real-session\r\n\r\n", model.Response{StatusCode: 200, Headers: jsonHeader(), Body: []byte(`{"code":"000000","data":{"balance":100}}`)})
 		ctx.SendFunc = func(_ context.Context, request *httpraw.Request) (model.Response, error) {
