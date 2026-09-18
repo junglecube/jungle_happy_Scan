@@ -2,8 +2,9 @@ package config
 
 import "strings"
 
-// Legacy rule buckets stay editable and are consumed by the two public SQL
-// plugins. Only selection IDs are consolidated; custom payloads are retained.
+// Legacy rule buckets stay editable and are consumed by the public fast/deep
+// SQL and XSS plugins. Only selection IDs are consolidated; custom payloads
+// are retained.
 func NormalizeSQLPluginIDs(ids []string, normal bool) []string {
 	if ids == nil {
 		return nil
@@ -27,10 +28,10 @@ func NormalizeSQLPluginIDs(ids []string, normal bool) []string {
 			seen[id] = true
 		}
 	}
-	if seen["sqli_deep"] || seen["all"] {
+	if seen["sqli_deep"] || seen["reflected_xss_deep"] || seen["all"] {
 		filtered := result[:0]
 		for _, id := range result {
-			if id != "sqli" {
+			if id != "sqli" && id != "reflected_xss" {
 				filtered = append(filtered, id)
 			}
 		}

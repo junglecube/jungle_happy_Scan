@@ -30,6 +30,15 @@ type InsertionPoint struct {
 	encoding   string
 }
 
+// NestedXMLLeafLocation exposes the original XML leaf kind to plugins that
+// need to distinguish text/CDATA values from XML attributes after nesting.
+func NestedXMLLeafLocation(point InsertionPoint) string {
+	if point.nested != nil {
+		return point.nested.Location
+	}
+	return point.Location
+}
+
 var (
 	lexicalNumberPattern = regexp.MustCompile(`^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$`)
 	lexicalDatePattern   = regexp.MustCompile(`^\d{4}[-/]\d{2}[-/]\d{2}(?:[T ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.\d+)?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?)?$`)
@@ -436,6 +445,41 @@ func mutateNested(req *Request, point InsertionPoint, value string) (*Request, e
 		outerValue = encoder.EncodeToString(mutated)
 	}
 	return Mutate(req, *point.parent, outerValue)
+}
+
+// NestedXMLValue returns the current XML document carried by a direct query or
+// form parameter. It is intentionally limited to one nesting level: callers
+// use it when a plugin needs to add document-level XML declarations/DTD data
+// while preserving the outer parameter encoding.
+func NestedXMLValue(req *Request, point InsertionPoint) (string, error) {
+	if req == nil || point.parent == nil || point.parent.Location != "form" && point.parent.Location != "query" {
+		return "", errorsf("嵌套 XML 缺少 query/form 父参数")
+	}
+	raw := string(req.Body)
+	if point.parent.Location == "query" {
+		parsed, err := url.Parse(req.Target)
+		if err != nil {
+			return "", err
+		}
+		raw = parsed.RawQuery
+	}
+	for _, candidate := range discoverPairs(point.parent.Location, raw) {
+		if candidate.Name == point.parent.Name && candidate.Occurrence == point.parent.Occurrence {
+			return candidate.Value, nil
+		}
+	}
+	return "", fmt.Errorf("嵌套 XML 父参数 %q 不存在", point.parent.Name)
+}
+
+// MutateNestedXMLDocument replaces the complete XML value of a direct query or
+// form parameter. Unlike Mutate on the leaf insertion point, this keeps the
+// XML declaration/DOCTYPE at document scope and lets the normal query/form
+// encoder restore the outer request representation.
+func MutateNestedXMLDocument(req *Request, point InsertionPoint, document string) (*Request, error) {
+	if req == nil || point.parent == nil || point.parent.Location != "form" && point.parent.Location != "query" {
+		return nil, errorsf("嵌套 XML 缺少 query/form 父参数")
+	}
+	return Mutate(req, *point.parent, document)
 }
 
 // MutateJSONRaw replaces a JSON insertion point with a typed JSON value. It is

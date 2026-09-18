@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
 <<<<<<< HEAD
-  <title>jungle_happy_Scan · V3.9.0</title>
-  <link rel="stylesheet" href="/styles.css?v=3.9.0">
-  <link rel="stylesheet" href="/v11.css?v=3.9.0-settings2">
-  <link rel="stylesheet" href="/webscan.css?v=3.9.0">
+  <title>jungle_happy_Scan · V3.11.0</title>
+  <link rel="stylesheet" href="/styles.css?v=3.11.0">
+  <link rel="stylesheet" href="/v11.css?v=3.11.0-settings2">
+  <link rel="stylesheet" href="/webscan.css?v=3.11.0">
 =======
   <title>jungle_happy_Scan · V3.8.3</title>
   <link rel="stylesheet" href="/styles.css?v=3.8.3">
@@ -21,7 +21,7 @@
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
 <<<<<<< HEAD
-      <span><strong>jungle_happy_Scan</strong><small>V3.9.0</small></span>
+      <span><strong>jungle_happy_Scan</strong><small>V3.11.0</small></span>
 =======
       <span><strong>jungle_happy_Scan</strong><small>V3.8.3</small></span>
 >>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
@@ -413,12 +413,12 @@
 
       <div class="release-summary panel">
 <<<<<<< HEAD
-        <div><span>当前版本</span><strong>V3.9.0</strong></div>
+        <div><span>当前版本</span><strong>V3.11.0</strong></div>
 =======
         <div><span>当前版本</span><strong>V3.8.3</strong></div>
 >>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
-	        <div><span>漏洞插件</span><strong>48 个</strong></div>
+	        <div><span>漏洞插件</span><strong>49 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
       </div>
 
@@ -427,9 +427,9 @@
         <article class="release-entry">
           <div class="release-marker"><span></span></div>
           <div class="release-content panel">
-            <header><div><span class="release-tag">CURRENT</span><h2>V3.9.0</h2></div><time datetime="2026-09-12">2026-09-12</time></header>
-            <p class="release-lead">修复扫描判定、补全请求对照与迟到回连，业务成功／失败规则可在持久配置中管理。</p>
-            <div class="release-groups"><section><h3>扫描准确性</h3><ul><li>短信失败优先；修复 XXE 文档和 CDATA，上传执行保留真实等级。</li><li>XSS 逐位置检查；文件读取增加不存在路径对照；SQL 深度先覆盖各参数。</li><li>敏感信息按 validator 校验；分数不升级确认状态。</li></ul></section><section><h3>配置与升级</h3><ul><li>前台配置业务规则、短信阈值和回连等待窗口。</li><li>替换二进制并重启，沿用原 config；首次自动备份并迁移到版本 33。</li></ul></section></div>
+            <header><div><span class="release-tag">CURRENT</span><h2>V3.11.0</h2></div><time datetime="2026-09-18">2026-09-18</time></header>
+            <p class="release-lead">反射型 XSS 拆分为快速与深度检测，补齐常见 HTML 事件和一行式变体，并保持原 config 可直接升级。</p>
+            <div class="release-groups"><section><h3>XSS 快速与深度</h3><ul><li>快速模式先用唯一标记定位反射上下文，再验证 IMG/onerror、details/ontoggle 等低成本 Payload。</li><li>深度模式包含快速 Payload，并增加无引号属性、反引号函数、Object.bind、Symbol.replace、脚本上下文和自索引一行式 Payload。</li><li>逐个原始反射位置匹配完整 Payload，避免 XML/JSON 包装、编码副本或其他位置干扰判断；记录可见性和 CSP 影响。</li></ul></section><section><h3>配置与升级</h3><ul><li>新增 <code>reflected_xss_deep</code> 插件；选择深度时自动去重快速插件，旧配置规则保留并补齐新默认规则。</li><li>替换二进制并重启即可沿用原 config；首次启动自动备份并迁移到配置版本 34。</li></ul></section></div>
           </div>
         </article>
         <article class="release-card current">
@@ -1171,9 +1171,9 @@
   </main>
   <div class="toast" id="toast" role="status"></div>
 <<<<<<< HEAD
-  <script src="/codemirror.js?v=3.9.0" defer></script>
-  <script src="/app.js?v=3.9.0-settings2" defer></script>
-  <script src="/webscan.js?v=3.9.0" defer></script>
+  <script src="/codemirror.js?v=3.11.0" defer></script>
+  <script src="/app.js?v=3.11.0-settings2" defer></script>
+  <script src="/webscan.js?v=3.11.0" defer></script>
 =======
   <script src="/codemirror.js?v=3.8.3" defer></script>
   <script src="/app.js?v=3.8.3" defer></script>

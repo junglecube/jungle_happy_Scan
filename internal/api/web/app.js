@@ -67,7 +67,7 @@ const pluginGroups=[
   {name:'SQL 与查询注入',ids:['sqli','sqli_deep','nosql_injection','ldap_injection','xpath_injection']},
   {name:'文件与 XML',ids:['file_read','file_read_encoded','file_upload','file_upload_execution','xxe','xxe_extended']},
   {name:'身份、权限与会话',ids:['unauthorized','idor','csrf','method_override','mass_assignment','mass_assignment_extended','path_normalization','parameter_confusion','proxy_trust_bypass','jwt_weak','jwt_active','shiro']},
-  {name:'代码与表达式执行',ids:['reflected_xss','ssti','java_expression','java_expression_extended','command_injection','command_injection_oast','command_injection_timing','jndi_injection','java_deserialization','json_polymorphic']},
+  {name:'代码与表达式执行',ids:['reflected_xss','reflected_xss_deep','ssti','java_expression','java_expression_extended','command_injection','command_injection_oast','command_injection_timing','jndi_injection','java_deserialization','json_polymorphic']},
   {name:'服务端请求与跳转',ids:['ssrf','open_redirect','crlf_injection','host_header_injection']},
   {name:'API、框架与协议配置',ids:['api_exposure','spring_actuator','graphql_security','graphql_alias_abuse','cors','security_headers','http_trace']},
   {name:'响应与业务风险',ids:['sensitive_data','error_disclosure','error_disclosure_extended','sms_abuse']}
@@ -207,7 +207,7 @@ async function loadGuide(){
   if(!content||!toc)return;
   try{
 <<<<<<< HEAD
-    const response=await fetch('/plugins.md?v=3.9.0');
+    const response=await fetch('/plugins.md?v=3.11.0');
 =======
     const response=await fetch('/plugins.md?v=3.8.3');
 >>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929

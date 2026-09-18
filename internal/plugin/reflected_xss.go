@@ -9,14 +9,30 @@ import (
 )
 
 type ReflectedXSS struct{}
+type ReflectedXSSDeep struct{}
 
 func (ReflectedXSS) Meta() model.PluginMeta {
-	return StandardMeta("reflected_xss", "反射型XSS", "先定位唯一标记的反射上下文，再验证 HTML/属性/脚本上下文关键字符。", "active", true)
+	meta := StandardMeta("reflected_xss", "反射型 XSS（快速）", "先定位唯一标记，再使用少量常见 HTML、属性和脚本 Payload 验证反射型 XSS。", "active", true)
+	meta.Version = "3.11.0"
+	return meta
+}
+
+func (ReflectedXSSDeep) Meta() model.PluginMeta {
+	meta := StandardMeta("reflected_xss_deep", "反射型 XSS（深度）", "包含快速 Payload，并增加 img/onerror、details/ontoggle、无引号、反引号和 JavaScript 一行式变体。", "active", true)
+	meta.Version = "3.11.0"
+	return meta
 }
 
 func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
-	meta := p.Meta()
-	rule := ctx.Rule(meta.ID)
+	return scanReflectedXSS(ctx, p.Meta(), "reflected_xss")
+}
+
+func (p ReflectedXSSDeep) Scan(ctx *Context) ([]model.Finding, error) {
+	return scanReflectedXSS(ctx, p.Meta(), "reflected_xss_deep")
+}
+
+func scanReflectedXSS(ctx *Context, meta model.PluginMeta, ruleID string) ([]model.Finding, error) {
+	rule := ctx.Rule(ruleID)
 	if !contains([]string{"GET", "POST", "PUT", "PATCH"}, ctx.Request.Method) {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
@@ -69,6 +85,7 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 				// Assess each raw payload occurrence in its own original context.
 				// An encoded copy elsewhere must not veto this occurrence.
 				matched := false
+				matchOffset := -1
 				offset := 0
 				for offset < len(testResponse.Text()) {
 					relative := strings.Index(testResponse.Text()[offset:], payload)
@@ -78,6 +95,7 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 					at := offset + relative
 					if htmlContextAt(testResponse.Text(), at) == contextKind {
 						matched = true
+						matchOffset = at
 						break
 					}
 					offset = at + len(payload)
@@ -85,10 +103,18 @@ func (p ReflectedXSS) Scan(ctx *Context) ([]model.Finding, error) {
 				if !matched {
 					continue
 				}
-				findings = append(findings, Finding(meta, "输入在 HTML 上下文中未经编码反射", model.SeverityLow, model.ConfidenceFirm, point.Label(),
-					"唯一标记与上下文闭合 payload 在同一反射位置完整出现；尚未取得浏览器执行证据。",
+				csp := assessXSSCSP(testResponse, payload)
+				visibility := xssVisibilityContext(testResponse.Text(), matchOffset)
+				title := "输入在 HTML 上下文中未经编码反射"
+				description := "唯一标记与上下文闭合 payload 在同一反射位置完整出现；尚未取得浏览器执行证据。"
+				if csp.BlocksInline {
+					title += "（当前 Payload 受 CSP 缓解）"
+					description += " 响应中的强制 CSP 策略会阻断本次内联脚本/事件 Payload；这不等于所有 XSS 传播路径均不存在。"
+				}
+				findings = append(findings, Finding(meta, title, model.SeverityLow, model.ConfidenceFirm, point.Label(),
+					description,
 					"按 HTML、属性和 JavaScript 输出上下文编码，避免将不可信内容拼接为源码。",
-					[]model.Evidence{ctx.Evidence("唯一标记定位反射位置", markerReq, &markerResponse, map[string]any{"context": contextKind, "token": token}), ctx.Evidence("当前反射位置保留完整 payload", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name, "match": payload})}, "OWASP WSTG-INPV-01"))
+					[]model.Evidence{ctx.Evidence("唯一标记定位反射位置", markerReq, &markerResponse, map[string]any{"context": contextKind, "token": token}), ctx.Evidence("当前反射位置保留完整 payload", testReq, &testResponse, map[string]any{"context": contextKind, "payload_rule": payloadRule.Name, "match": payload, "visibility": visibility, "csp_present": csp.Present, "csp_report_only": csp.ReportOnly, "csp_blocks_inline": csp.BlocksInline, "csp_directive": csp.Directive})}, "OWASP WSTG-INPV-01"))
 				break
 			}
 		}
@@ -382,7 +408,110 @@ func xssCandidates(payloads []config.PayloadRule, kind string) []config.PayloadR
 	if prefix != "" {
 		result = append(result, config.PayloadRule{Name: "上下文闭合", Kind: kind, Payload: prefix + `{{token}}<svg/onload=confirm("{{token}}")>`})
 	}
+	// Some HTML/XML serializers escape or rewrite quotes while leaving angle
+	// brackets intact. A quote-free probe keeps the executable markup valid in
+	// embedded JSON/XML text nodes such as <Field>{"value":"..."}</Field>.
+	if kind == "html-text" || kind == "tag" {
+		result = append(result, config.PayloadRule{Name: "无引号 HTML 标签", Kind: kind, Payload: `{{token}}<svg/onload=confirm(1)>`})
+	}
 	return result
+}
+
+type xssCSPAssessment struct {
+	Present      bool
+	ReportOnly   bool
+	BlocksInline bool
+	Directive    string
+}
+
+// assessXSSCSP evaluates only the tested inline script/event vector. CSP is a
+// mitigation signal, not a reason to discard a reflection finding: another
+// browser context or a different policy can still leave the sink exploitable.
+func assessXSSCSP(response model.Response, payload string) xssCSPAssessment {
+	policy := strings.TrimSpace(response.Header("Content-Security-Policy"))
+	if policy == "" {
+		return xssCSPAssessment{ReportOnly: strings.TrimSpace(response.Header("Content-Security-Policy-Report-Only")) != ""}
+	}
+	result := xssCSPAssessment{Present: true}
+	directives := make(map[string][]string)
+	for _, raw := range strings.Split(policy, ";") {
+		fields := strings.Fields(strings.TrimSpace(raw))
+		if len(fields) == 0 {
+			continue
+		}
+		name := strings.ToLower(fields[0])
+		directives[name] = fields[1:]
+	}
+	lookup := []string{"script-src-attr", "script-src", "default-src"}
+	if strings.Contains(strings.ToLower(payload), "<script") {
+		lookup = []string{"script-src-elem", "script-src", "default-src"}
+	}
+	for _, name := range lookup {
+		sources, ok := directives[name]
+		if !ok {
+			continue
+		}
+		result.Directive = name
+		for _, source := range sources {
+			if strings.EqualFold(source, "'unsafe-inline'") {
+				return result
+			}
+		}
+		// A nonce/hash would need to be present on the injected element and is
+		// therefore not usable by this static payload. Any declared script
+		// source list without unsafe-inline blocks this inline vector.
+		result.BlocksInline = true
+		return result
+	}
+	return result
+}
+
+func xssVisibilityContext(body string, at int) string {
+	if at < 0 || at > len(body) {
+		return "unknown"
+	}
+	prefix := body[:at]
+	if open := strings.LastIndex(prefix, "<"); open > strings.LastIndex(prefix, ">") {
+		fragment := strings.ToLower(prefix[open:])
+		if strings.HasPrefix(fragment, "<input") && regexp.MustCompile(`\btype\s*=\s*["']?hidden\b`).MatchString(fragment) {
+			return "hidden-input"
+		}
+		if regexp.MustCompile(`\bstyle\s*=\s*["'][^"']*display\s*:\s*none`).MatchString(fragment) {
+			return "display-none-attribute"
+		}
+	}
+	// Track already-open elements for the common hidden/display:none wrapper
+	// case. Visibility is metadata only; CSS/hidden does not suppress an HTML
+	// parser executing a newly injected script-capable element.
+	tagRE := regexp.MustCompile(`(?is)<(/?)([a-z][\w:-]*)([^>]*)>`)
+	stack := []struct {
+		name   string
+		hidden bool
+	}{}
+	for _, match := range tagRE.FindAllStringSubmatch(prefix, -1) {
+		if match[1] == "/" {
+			for i := len(stack) - 1; i >= 0; i-- {
+				if stack[i].name == strings.ToLower(match[2]) {
+					stack = stack[:i]
+					break
+				}
+			}
+			continue
+		}
+		attrs := strings.ToLower(match[3])
+		hidden := strings.Contains(attrs, " hidden") || strings.HasPrefix(attrs, "hidden") ||
+			regexp.MustCompile(`\bstyle\s*=\s*["'][^"']*display\s*:\s*none`).MatchString(attrs)
+		stack = append(stack, struct {
+			name   string
+			hidden bool
+		}{strings.ToLower(match[2]), hidden})
+	}
+	for _, item := range stack {
+		if item.hidden {
+			return "hidden-ancestor"
+		}
+	}
+	return "visible"
 }
 
 func xssRequestEstimate(payloads []config.PayloadRule) int {

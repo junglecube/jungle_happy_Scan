@@ -618,10 +618,10 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 	if !bytes.Contains(page, []byte("cfg-rule-payloads")) || !bytes.Contains(page, []byte(`id="cfg-rule-url-keywords"`)) ||
 		!bytes.Contains(page, []byte("jungle.jpg")) || !bytes.Contains(page, []byte("version-view")) ||
 <<<<<<< HEAD
-		!bytes.Contains(page, []byte("V3.9.0")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
+		!bytes.Contains(page, []byte("V3.11.0")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
 		!bytes.Contains(page, []byte(`id="assets-view"`)) ||
 		!bytes.Contains(page, []byte(`data-view="proxy"`)) || !bytes.Contains(page, []byte(`data-view="assets"`)) ||
-		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.9.0"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.9.0"`)) ||
+		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.11.0"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.11.0"`)) ||
 =======
 		!bytes.Contains(page, []byte("V3.8.3")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
 		!bytes.Contains(page, []byte(`id="assets-view"`)) ||
@@ -669,12 +669,12 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 		bytes.Contains(page, []byte(`id="select-all"`)) ||
 		bytes.Contains(page, []byte(`<select id="scan-mode"`)) || bytes.Contains(page, []byte("cfg-mode")) {
 <<<<<<< HEAD
-		t.Fatalf("V3.9.0 UI assets are missing or obsolete controls remain: %s", page)
+		t.Fatalf("V3.11.0 UI assets are missing or obsolete controls remain: %s", page)
 =======
 		t.Fatalf("V3.8.3 UI assets are missing or obsolete controls remain: %s", page)
 >>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	}
-	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("48 个")) {
+	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("49 个")) {
 		t.Fatalf("Custom must be last and V2 plugin count must be current")
 	}
 	response, err = http.Get(scanner.URL + "/app.js")

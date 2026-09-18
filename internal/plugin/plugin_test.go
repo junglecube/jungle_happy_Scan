@@ -541,11 +541,11 @@ func TestSQLStopsEscalatingAfterConfirmedErrorSignal(t *testing.T) {
 }
 
 func TestV2RegistryAndDefaultRuleCoverage(t *testing.T) {
-	if len(All()) != 48 {
-		t.Fatalf("expected exactly 48 registered plugins, got %d", len(All()))
+	if len(All()) != 49 {
+		t.Fatalf("expected exactly 49 registered plugins, got %d", len(All()))
 	}
 	cfg := config.Default()
-	for _, id := range []string{"unauthorized", "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe", "xxe_extended", "file_read", "file_read_encoded", "file_upload", "file_upload_execution", "cors", "reflected_xss", "ssrf", "open_redirect", "crlf_injection", "ssti", "command_injection", "command_injection_oast", "command_injection_timing", "csrf", "error_disclosure", "error_disclosure_extended", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mass_assignment_extended", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "graphql_alias_abuse", "sms_abuse", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "host_header_injection"} {
+	for _, id := range []string{"unauthorized", "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe", "xxe_extended", "file_read", "file_read_encoded", "file_upload", "file_upload_execution", "cors", "reflected_xss", "reflected_xss_deep", "ssrf", "open_redirect", "crlf_injection", "ssti", "command_injection", "command_injection_oast", "command_injection_timing", "csrf", "error_disclosure", "error_disclosure_extended", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mass_assignment_extended", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "graphql_alias_abuse", "sms_abuse", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "host_header_injection"} {
 		if len(cfg.PluginRules[id].Payloads) == 0 {
 			t.Fatalf("payload-driven plugin %s has no Web-configurable defaults", id)
 		}

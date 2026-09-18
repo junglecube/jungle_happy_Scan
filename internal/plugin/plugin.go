@@ -436,7 +436,7 @@ func PassiveMeta(id, name, description string) model.PluginMeta {
 var registry = []Plugin{
 	Unauthorized{}, SQLInjection{}, SQLInjectionDeep{},
 	XXE{}, XXEExtended{}, FileRead{}, FileReadEncoded{}, FileUpload{}, FileUploadExecution{}, SensitiveData{},
-	CORS{}, ReflectedXSS{}, SSRF{}, OpenRedirect{}, CRLFInjection{},
+	CORS{}, ReflectedXSS{}, ReflectedXSSDeep{}, SSRF{}, OpenRedirect{}, CRLFInjection{},
 	SSTI{}, SpringActuator{}, SecurityHeaders{}, JWTWeak{}, IDOR{},
 	CommandInjection{}, CommandInjectionOAST{}, CommandInjectionTiming{}, CSRF{}, APIExposure{},
 	ErrorDisclosure{}, ErrorDisclosureExtended{}, NoSQLInjection{},

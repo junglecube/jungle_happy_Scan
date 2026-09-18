@@ -123,7 +123,14 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 	}
 	switch id {
 	case "xxe", "xxe_extended":
-		if !strings.Contains(contentType, "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") {
+		hasNestedXML := false
+		for _, point := range points {
+			if point.Location == "nested_xml" && (httpraw.NestedXMLLeafLocation(point) == "xml" || httpraw.NestedXMLLeafLocation(point) == "xml_cdata") {
+				hasNestedXML = true
+				break
+			}
+		}
+		if !strings.Contains(contentType, "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") && !hasNestedXML {
 			return false, "请求体不是 XML"
 		}
 	case "file_upload", "file_upload_execution":
@@ -243,7 +250,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !strings.Contains(contentType, "json") && !hasNamed([]string{"user", "username", "filter", "query", "search", "where", "id"}) {
 			return false, "没有 NoSQL 查询候选输入"
 		}
-	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
+	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "error_disclosure", "error_disclosure_extended", "reflected_xss", "reflected_xss_deep", "ssti", "crlf_injection", "java_expression", "java_expression_extended":
 		if !hasPoints {
 			return false, "没有可变异输入点"
 		}
@@ -301,7 +308,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		return count * 6
 	case "ldap_injection", "xpath_injection":
 		return count * 5
-	case "reflected_xss":
+	case "reflected_xss", "reflected_xss_deep":
 		return count * xssRequestEstimate(cfg.PluginRules[id].Payloads)
 	case "ssrf":
 		candidates := 0
@@ -399,7 +406,8 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "xxe", "xxe_extended":
 		xmlPoints := 0
 		for _, point := range points {
-			if point.Location == "xml" || point.Location == "xml_cdata" {
+			if point.Location == "xml" || point.Location == "xml_cdata" ||
+				(point.Location == "nested_xml" && (httpraw.NestedXMLLeafLocation(point) == "xml" || httpraw.NestedXMLLeafLocation(point) == "xml_cdata")) {
 				xmlPoints++
 			}
 		}
@@ -484,7 +492,7 @@ func pluginPriority(id string) int {
 	switch id {
 	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "mybatis_dynamic_sql", "error_disclosure", "error_disclosure_extended", "file_read", "file_read_encoded", "unauthorized", "command_injection", "command_injection_oast", "command_injection_timing", "xxe", "xxe_extended", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "jwt_active", "proxy_trust_bypass":
 		return 4
-	case "reflected_xss", "nosql_injection", "ldap_injection", "xpath_injection", "cors", "crlf_injection", "path_normalization", "parameter_confusion":
+	case "reflected_xss", "reflected_xss_deep", "nosql_injection", "ldap_injection", "xpath_injection", "cors", "crlf_injection", "path_normalization", "parameter_confusion":
 		return 3
 	case "mass_assignment", "mass_assignment_extended", "method_override", "java_deserialization", "json_polymorphic", "file_upload", "file_upload_execution", "idor", "csrf", "sms_abuse", "graphql_alias_abuse":
 		return 2

@@ -1,7 +1,13 @@
 <<<<<<< HEAD
-# jungle_happy_Scan V3.9.0
+# jungle_happy_Scan V3.11.0
 
-当前源码版本：`v3.9.0`。
+当前源码版本：`v3.11.0`。
+
+## V3.11.0 更新
+
+- 反射型 XSS 拆分快速与深度插件，补齐 IMG/onerror、details/ontoggle、属性/脚本上下文和常见一行式 Payload，并按原始反射位置匹配证据。
+- 新增 `reflected_xss_deep`，选择深度时自动去重快速插件；旧 config 自动迁移到配置版本 34，替换可执行文件即可升级。
+- [V3.11.0 配置与升级说明](docs/RELEASE-v3.11.0.md)。
 
 ## V3.9.0 更新
 

