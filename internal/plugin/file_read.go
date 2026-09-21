@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"jungle_happy_Scan/internal/config"
 	"jungle_happy_Scan/internal/httpraw"
 	"jungle_happy_Scan/internal/model"
 )
@@ -20,6 +21,24 @@ func (p FileRead) Scan(ctx *Context) ([]model.Finding, error) {
 	return scanFileRead(ctx, p.Meta())
 }
 
+// fileReadPayloadsForMode is intentionally local to the unified file-read
+// plugin. Other rule families keep their explicit extension IDs; file-read
+// keeps one public ID while standard scans use the inexpensive payloads and
+// deep scans add encoded/path-normalization variants.
+func fileReadPayloadsForMode(rule config.PluginRuleConfig, mode string) []config.PayloadRule {
+	if strings.EqualFold(strings.TrimSpace(mode), "deep") {
+		return append([]config.PayloadRule(nil), rule.Payloads...)
+	}
+	result := make([]config.PayloadRule, 0, len(rule.Payloads))
+	for _, payload := range rule.Payloads {
+		if strings.EqualFold(strings.TrimSpace(payload.Mode), "deep") {
+			continue
+		}
+		result = append(result, payload)
+	}
+	return result
+}
+
 func scanFileRead(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
 	rule := ctx.Rule(meta.ID)
 	points := make([]httpraw.InsertionPoint, 0, len(ctx.Points))
@@ -28,7 +47,7 @@ func scanFileRead(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) 
 			points = append(points, point)
 		}
 	}
-	payloads := payloadsForMode(rule, ctx.Mode)
+	payloads := fileReadPayloadsForMode(rule, ctx.Mode)
 	total := len(points) * len(payloads) * 3
 	done := 0
 	ctx.Progress(meta.ID, done, max(total, 1))
@@ -102,7 +121,7 @@ func scanFileRead(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) 
 
 func fileReadPoint(point httpraw.InsertionPoint, names []string) bool {
 	value := strings.TrimSpace(point.Value)
-	return semanticName(point.Name, names) || strings.HasPrefix(value, "/") || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, "file://") || strings.Contains(value, "/") && !strings.Contains(value, "://")
+	return controlledSemanticName(point.Name, names) || strings.HasPrefix(value, "/") || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") || strings.HasPrefix(value, "file://") || strings.Contains(value, "/") && !strings.Contains(value, "://")
 }
 func fileResponseMatch(pattern *regexp.Regexp, body []byte) []byte {
 	if match := pattern.Find(body); len(match) > 0 {

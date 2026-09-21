@@ -21,7 +21,8 @@ type proxyTrustVariant struct {
 
 func (p ProxyTrustBypass) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
-	anonymous, removed := httpraw.RemoveSessions(ctx.Request, httpraw.EffectiveSessionIdentifiers(ctx.Request, ctx.Config.SessionIdentifiers))
+	identifiers := scopedSessionIdentifiers(ctx.Request, ctx.Config, ctx.ParameterScope, true)
+	anonymous, removed := httpraw.RemoveSessions(ctx.Request, identifiers)
 	if len(removed) == 0 {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil

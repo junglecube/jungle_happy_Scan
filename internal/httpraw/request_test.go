@@ -217,6 +217,27 @@ func TestAdvancedDiscoveryAndDynamicRules(t *testing.T) {
 	}
 }
 
+func TestAdvancedDiscoveryExcludesWholeCookieCollection(t *testing.T) {
+	raw := "POST /api HTTP/1.1\r\nHost: bank.test\r\nContent-Type: application/x-www-form-urlencoded\r\nCookie: a=one; c=two; timer=three\r\n\r\na=body&name=alice"
+	request, err := Parse(raw, "https")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.ExcludedParameterNames = []string{"Cookie"}
+	for _, point := range DiscoverAdvanced(request, cfg) {
+		if point.Location == "cookie" {
+			t.Fatalf("Cookie exclusion leaked cookie insertion point: %#v", point)
+		}
+	}
+	// The exclusion is location-aware: a regular form field with the literal
+	// name Cookie keeps the existing exact-name behavior, while cookie subitems
+	// are all removed.
+	if !excludedInsertionPoint(InsertionPoint{Location: "form", Name: "Cookie"}, cfg.ExcludedParameterNames) {
+		t.Fatal("literal form field named Cookie should remain excluded")
+	}
+}
+
 func TestV23NestedDocumentsAndExcludedParameters(t *testing.T) {
 	raw := "POST /api?nested=%7B%22user%22%3A%7B%22id%22%3A%227%22%7D%7D&content_string=ignored HTTP/1.1\r\n" +
 		"Host: bank.test\r\nContent-Type: application/json\r\nX-Scan: {\"role\":\"user\"}\r\n\r\n" +

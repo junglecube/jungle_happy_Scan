@@ -36,19 +36,23 @@ type Context struct {
 	Baselines         []model.Response
 	Baseline          model.Response
 	Points            []httpraw.InsertionPoint
-	Mode              string
-	Config            config.Config
-	Callbacks         *callback.Registry
-	SendFunc          func(context.Context, *httpraw.Request) (model.Response, error)
-	Progress          func(pluginID string, completed, total int)
-	OnRequest         func(used int)
-	OnResolution      func(kind string, count int)
-	RequestBudget     int
-	budgetMu          sync.Mutex
-	requestsUsed      int
-	requestsHeld      int
-	budgetHit         bool
-	coverageIssues    []string
+	// ParameterScope is the optional per-scan selector list. Points are already
+	// filtered by the engine; plugins that derive candidates directly from the
+	// request (multipart files or session credentials) consult it explicitly.
+	ParameterScope []string
+	Mode           string
+	Config         config.Config
+	Callbacks      *callback.Registry
+	SendFunc       func(context.Context, *httpraw.Request) (model.Response, error)
+	Progress       func(pluginID string, completed, total int)
+	OnRequest      func(used int)
+	OnResolution   func(kind string, count int)
+	RequestBudget  int
+	budgetMu       sync.Mutex
+	requestsUsed   int
+	requestsHeld   int
+	budgetHit      bool
+	coverageIssues []string
 }
 
 func (c *Context) Send(request *httpraw.Request) (model.Response, error) {
@@ -435,7 +439,7 @@ func PassiveMeta(id, name, description string) model.PluginMeta {
 
 var registry = []Plugin{
 	Unauthorized{}, SQLInjection{}, SQLInjectionDeep{},
-	XXE{}, XXEExtended{}, FileRead{}, FileReadEncoded{}, FileUpload{}, FileUploadExecution{}, SensitiveData{},
+	XXE{}, XXEExtended{}, FileRead{}, FileUpload{}, FileUploadExecution{}, SensitiveData{},
 	CORS{}, ReflectedXSS{}, ReflectedXSSDeep{}, SSRF{}, OpenRedirect{}, CRLFInjection{},
 	SSTI{}, SpringActuator{}, SecurityHeaders{}, JWTWeak{}, IDOR{},
 	CommandInjection{}, CommandInjectionOAST{}, CommandInjectionTiming{}, CSRF{}, APIExposure{},
@@ -508,9 +512,20 @@ func Select(ids []string, mode string) ([]Plugin, error) {
 	// mode is accepted for V1/V1.4 API compatibility only. V2.0 selection is
 	// entirely defined by plugin IDs (or a preset expanded into plugin IDs).
 	_ = mode
+	legacyFileReadDeep := false
 	selected := make(map[string]bool)
+	for _, rawID := range ids {
+		if strings.EqualFold(strings.TrimSpace(rawID), "file_read_encoded") {
+			legacyFileReadDeep = true
+		}
+	}
 	for _, id := range config.NormalizeSQLPluginIDs(ids, false) {
 		selected[id] = true
+	}
+	if legacyFileReadDeep {
+		// The old encoded bucket is now a compatibility alias. If it is present,
+		// prefer one unified deep scan even when a caller also supplied file_read.
+		selected["file_read"] = true
 	}
 	allSelected := selected["all"]
 	var result []Plugin
@@ -520,7 +535,11 @@ func Select(ids []string, mode string) ([]Plugin, error) {
 			continue
 		}
 		if allSelected || selected[meta.ID] {
-			result = append(result, item)
+			if meta.ID == "file_read" && legacyFileReadDeep {
+				result = append(result, FileReadEncoded{})
+			} else {
+				result = append(result, item)
+			}
 			delete(selected, meta.ID)
 		}
 	}

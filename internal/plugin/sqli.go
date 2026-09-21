@@ -52,11 +52,7 @@ type sqlScanProfile struct {
 
 func (SQLInjection) Meta() model.PluginMeta {
 	meta := StandardMeta("sqli", "SQL 注入（快速）", "单引号破坏/双单引号及空串恢复、条件错误、按数值/字符串/LIKE 选择布尔差分；反向重复确认，不执行延迟或堆叠探测。", "active", true)
-<<<<<<< HEAD
 	meta.Version = "3.9.0"
-=======
-	meta.Version = "3.8.3"
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	return meta
 }
 
@@ -65,7 +61,6 @@ func (p SQLInjection) Scan(ctx *Context) ([]model.Finding, error) {
 }
 
 func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfile) ([]model.Finding, error) {
-<<<<<<< HEAD
 	savedConfig := ctx.Config
 	defer func() { ctx.Config = savedConfig }()
 	publicID := ctx.ActivePluginID
@@ -73,8 +68,6 @@ func scanSQLInjection(ctx *Context, meta model.PluginMeta, profile sqlScanProfil
 		publicID = meta.ID
 	}
 	ctx.Config.BusinessRules = diff.ScopedBusinessRules(ctx.Config.BusinessRules, publicID, ctx.Request.Target)
-=======
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	ruleID := meta.ID
 	if profile.ruleID != "" {
 		ruleID = profile.ruleID

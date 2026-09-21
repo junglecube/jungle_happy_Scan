@@ -61,6 +61,90 @@ func TestClientTLSUploadPreservesFilename(t *testing.T) {
 	}
 }
 
+func TestParseAPIReturnsPluginParametersWithoutScanning(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer target.Close()
+	scanner := newTestServerWithConfig(t, target, "http", func(cfg *config.Config) { cfg.ExcludedParameterNames = []string{"name"} })
+	defer scanner.Close()
+	raw := "GET /items?id=1&name=alice HTTP/1.1\r\nHost: example.test\r\n\r\n"
+	body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"sqli"}})
+	response, err := http.Post(scanner.URL+"/api/v1/parse", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var parsed struct {
+		InsertionPoints  []map[string]any            `json:"insertion_points"`
+		PluginParameters map[string][]map[string]any `json:"plugin_parameters"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || len(parsed.PluginParameters["sqli"]) != 1 || parsed.PluginParameters["sqli"][0]["name"] != "id" {
+		t.Fatalf("unexpected plugin parameter parse response: status=%d parsed=%#v", response.StatusCode, parsed)
+	}
+	if len(parsed.InsertionPoints) != 1 || parsed.InsertionPoints[0]["name"] != "id" {
+		t.Fatalf("persistent exclusion was not applied before parse: %#v", parsed.InsertionPoints)
+	}
+}
+
+func TestParseAPIExcludesWholeCookieCollection(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer target.Close()
+	scanner := newTestServerWithConfig(t, target, "http", func(cfg *config.Config) {
+		cfg.ExcludedParameterNames = []string{"Cookie"}
+	})
+	defer scanner.Close()
+	raw := "POST /items?id=1 HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nCookie: a=; c=dadasd; timer=dadsa\r\n\r\nid=1"
+	body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"reflected_xss"}})
+	response, err := http.Post(scanner.URL+"/api/v1/parse", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var parsed struct {
+		InsertionPoints  []map[string]any            `json:"insertion_points"`
+		PluginParameters map[string][]map[string]any `json:"plugin_parameters"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
+		t.Fatal(err)
+	}
+	for _, point := range parsed.InsertionPoints {
+		if point["location"] == "cookie" {
+			t.Fatalf("parse API leaked excluded Cookie insertion point: %#v", point)
+		}
+	}
+	for _, point := range parsed.PluginParameters["reflected_xss"] {
+		if point["location"] == "cookie" {
+			t.Fatalf("plugin parameter preview leaked excluded Cookie insertion point: %#v", point)
+		}
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected parse status: %d", response.StatusCode)
+	}
+}
+
+func TestPlanHonorsParameterScope(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	defer target.Close()
+	scanner := newTestServer(t, target)
+	defer scanner.Close()
+	raw := "GET /items?id=1&name=alice HTTP/1.1\r\nHost: example.test\r\n\r\n"
+	body, _ := json.Marshal(map[string]any{"http": raw, "scan_type": []string{"sqli"}, "parameter_scope": []string{"name"}})
+	response, err := http.Post(scanner.URL+"/api/v1/plan", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var plan model.ScanPlan
+	if err := json.NewDecoder(response.Body).Decode(&plan); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || plan.DiscoveredPoints != 1 || !plan.Plugins["sqli"].Applicable {
+		t.Fatalf("parameter scope was not applied to plan: status=%d plan=%#v", response.StatusCode, plan)
+	}
+}
+
 func TestProxyCADownloadReturnsUsableCertificate(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
 	defer target.Close()
@@ -617,17 +701,10 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 	}
 	if !bytes.Contains(page, []byte("cfg-rule-payloads")) || !bytes.Contains(page, []byte(`id="cfg-rule-url-keywords"`)) ||
 		!bytes.Contains(page, []byte("jungle.jpg")) || !bytes.Contains(page, []byte("version-view")) ||
-<<<<<<< HEAD
-		!bytes.Contains(page, []byte("V3.11.0")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
+		!bytes.Contains(page, []byte("V3.13.0")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
 		!bytes.Contains(page, []byte(`id="assets-view"`)) ||
 		!bytes.Contains(page, []byte(`data-view="proxy"`)) || !bytes.Contains(page, []byte(`data-view="assets"`)) ||
-		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.11.0"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.11.0"`)) ||
-=======
-		!bytes.Contains(page, []byte("V3.8.3")) || !bytes.Contains(page, []byte(`id="proxy-view"`)) ||
-		!bytes.Contains(page, []byte(`id="assets-view"`)) ||
-		!bytes.Contains(page, []byte(`data-view="proxy"`)) || !bytes.Contains(page, []byte(`data-view="assets"`)) ||
-		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.8.3"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.8.3"`)) ||
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+		bytes.Contains(page, []byte(`data-view="webscan"`)) || !bytes.Contains(page, []byte(`src="/codemirror.js?v=3.13.0"`)) || !bytes.Contains(page, []byte(`src="/webscan.js?v=3.13.0"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-panel"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-forward"`)) ||
 		!bytes.Contains(page, []byte(`id="webscan-interception-drop"`)) ||
@@ -668,13 +745,9 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 		bytes.Contains(page, []byte(`id="coverage-report"`)) ||
 		bytes.Contains(page, []byte(`id="select-all"`)) ||
 		bytes.Contains(page, []byte(`<select id="scan-mode"`)) || bytes.Contains(page, []byte("cfg-mode")) {
-<<<<<<< HEAD
-		t.Fatalf("V3.11.0 UI assets are missing or obsolete controls remain: %s", page)
-=======
-		t.Fatalf("V3.8.3 UI assets are missing or obsolete controls remain: %s", page)
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
+		t.Fatalf("V3.13.0 UI assets are missing or obsolete controls remain: %s", page)
 	}
-	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("49 个")) {
+	if bytes.Index(page, []byte(`data-mode="custom"`)) < bytes.Index(page, []byte(`data-mode="deep"`)) || !bytes.Contains(page, []byte("48 个")) {
 		t.Fatalf("Custom must be last and V2 plugin count must be current")
 	}
 	response, err = http.Get(scanner.URL + "/app.js")
@@ -684,13 +757,14 @@ func TestConfigAPIAndEmbeddedPage(t *testing.T) {
 	app, _ := io.ReadAll(response.Body)
 	_ = response.Body.Close()
 	if bytes.Contains(app, []byte("backendScanMode")) || bytes.Contains(app, []byte("mode:backendScanMode")) ||
-		!bytes.Contains(app, []byte("const payload=withClientTLS({http,scheme,scan_type})")) || !bytes.Contains(app, []byte("signature-files")) || !bytes.Contains(app, []byte("withSignature")) ||
+		!bytes.Contains(app, []byte("const payload=withClientTLS({http,scheme,scan_type,mode}")) || !bytes.Contains(app, []byte("signature-files")) || !bytes.Contains(app, []byte("withSignature")) ||
 		!bytes.Contains(app, []byte("pluginGroups")) || !bytes.Contains(app, []byte("resolved_requests")) ||
+		!bytes.Contains(app, []byte("parse-parameters")) || !bytes.Contains(app, []byte("parameter_scope")) || !bytes.Contains(app, []byte("decodeHTTPRequestPreview")) ||
 		!bytes.Contains(app, []byte("Promise.all([ensurePlugins(),ensureConfig()])")) ||
 		!bytes.Contains(app, []byte("HappyScanEditor.create")) ||
 		!bytes.Contains(app, []byte("renderPluginProgress(progress.plugins||{},scan.coverage||{})")) ||
 		bytes.Contains(app, []byte("renderCoverage(")) {
-		t.Fatalf("Web scan must submit plugin IDs without a hidden mode: %s", app)
+		t.Fatalf("Web scan must submit plugin IDs with the selected mode: %s", app)
 	}
 	response, err = http.Get(scanner.URL + "/styles.css")
 	if err != nil {
@@ -1113,7 +1187,7 @@ func TestJungleHappyScanPresetResolution(t *testing.T) {
 		t.Fatalf("host override was not passed to scan input: %#v err=%v", hostInput, err)
 	}
 
-	for preset, expected := range map[string]int{"passive": 3, "normal": 8, "deep": 47} {
+	for preset, expected := range map[string]int{"passive": 3, "normal": 8, "deep": 46} {
 		input, err := (jungleHappyScanInput{
 			HTTP: "GET / HTTP/1.1\r\nHost: bank.test\r\n\r\n", ScanType: []string{preset},
 		}).scanInput()

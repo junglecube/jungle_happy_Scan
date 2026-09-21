@@ -18,7 +18,8 @@ func (PathNormalization) Meta() model.PluginMeta {
 
 func (p PathNormalization) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
-	anonymous, removed := httpraw.RemoveSessions(ctx.Request, ctx.Config.SessionIdentifiers)
+	identifiers := scopedSessionIdentifiers(ctx.Request, ctx.Config, ctx.ParameterScope, false)
+	anonymous, removed := httpraw.RemoveSessions(ctx.Request, identifiers)
 	variants := normalizedPathVariants(anonymous)
 	total := 1 + len(variants)*2
 	ctx.Progress(meta.ID, 0, max(total, 1))

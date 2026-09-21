@@ -54,6 +54,21 @@ func TestDefaultLinuxFileReadFingerprints(t *testing.T) {
 	}
 }
 
+func TestMergeLegacyFileReadRule(t *testing.T) {
+	rules := map[string]PluginRuleConfig{
+		"file_read":         {ParameterNames: []string{"customPath"}, Payloads: []PayloadRule{{Name: "base", Payload: "/etc/hosts"}}},
+		"file_read_encoded": {ParameterNames: []string{"legacyName"}, Payloads: []PayloadRule{{Name: "encoded", Payload: "%2e%2e%2fetc%2fpasswd"}}},
+	}
+	mergeFileReadPluginRules(rules)
+	if _, exists := rules["file_read_encoded"]; exists {
+		t.Fatal("legacy file-read rule bucket was not removed")
+	}
+	rule := rules["file_read"]
+	if !containsStringFold(rule.ParameterNames, "legacyName") || len(rule.Payloads) != 2 || rule.Payloads[1].Mode != "deep" {
+		t.Fatalf("legacy file-read content was not merged as deep: %#v", rule)
+	}
+}
+
 func TestV19UpgradeRestoresJSPXUploadProbe(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	cfg := Default()
@@ -301,7 +316,7 @@ func TestOpenUpgradesSQLRulesWithoutLosingCustomPayload(t *testing.T) {
 			t.Fatalf("legacy SQL Server pattern was not removed: %#v", pattern)
 		}
 	}
-	for _, pluginID := range []string{"error_disclosure", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "sms_abuse", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe_extended", "file_read_encoded", "file_upload_execution", "command_injection_oast", "command_injection_timing", "java_expression_extended", "mass_assignment_extended", "graphql_alias_abuse", "error_disclosure_extended"} {
+	for _, pluginID := range []string{"error_disclosure", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "sms_abuse", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe_extended", "file_upload_execution", "command_injection_oast", "command_injection_timing", "java_expression_extended", "mass_assignment_extended", "graphql_alias_abuse", "error_disclosure_extended"} {
 		rule := got.PluginRules[pluginID]
 		if len(rule.Payloads) == 0 {
 			t.Fatalf("upgraded config missing default rules for %s", pluginID)

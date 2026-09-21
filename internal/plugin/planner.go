@@ -18,12 +18,23 @@ type ExecutionPlan struct {
 }
 
 func BuildExecutionPlans(selected []Plugin, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config, available int) []ExecutionPlan {
+	return buildExecutionPlans(selected, request, points, mode, cfg, available, nil)
+}
+
+// BuildExecutionPlansWithScope is the request-scoped variant used by the
+// engine. The original function remains available for existing callers and
+// tests, so the public API is backward compatible.
+func BuildExecutionPlansWithScope(selected []Plugin, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config, available int, scope []string) []ExecutionPlan {
+	return buildExecutionPlans(selected, request, points, mode, cfg, available, scope)
+}
+
+func buildExecutionPlans(selected []Plugin, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config, available int, scope []string) []ExecutionPlan {
 	plans := make([]ExecutionPlan, 0, len(selected))
 	totalEstimated := 0
 	for _, item := range selected {
 		meta := item.Meta()
-		applicable, reason := pluginApplicable(meta.ID, request, points, cfg)
-		estimated := estimateRequests(meta.ID, request, points, mode, cfg)
+		applicable, reason := pluginApplicableScoped(meta.ID, request, points, cfg, scope)
+		estimated := estimateRequestsScoped(meta.ID, request, points, mode, cfg, scope)
 		pointCount := estimatedPointCount(meta.ID, points, cfg)
 		if !applicable {
 			estimated = 0
@@ -109,6 +120,10 @@ func BuildExecutionPlans(selected []Plugin, request *httpraw.Request, points []h
 }
 
 func pluginApplicable(id string, request *httpraw.Request, points []httpraw.InsertionPoint, cfg config.Config) (bool, string) {
+	return pluginApplicableScoped(id, request, points, cfg, nil)
+}
+
+func pluginApplicableScoped(id string, request *httpraw.Request, points []httpraw.InsertionPoint, cfg config.Config, scope []string) (bool, string) {
 	contentType := request.ContentType()
 	body := strings.ToLower(string(request.Body))
 	target := strings.ToLower(request.Target)
@@ -124,11 +139,17 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 	switch id {
 	case "xxe", "xxe_extended":
 		hasNestedXML := false
+		hasSelectedXML := len(scope) == 0
 		for _, point := range points {
+			if xxePoint(point) {
+				hasSelectedXML = true
+			}
 			if point.Location == "nested_xml" && (httpraw.NestedXMLLeafLocation(point) == "xml" || httpraw.NestedXMLLeafLocation(point) == "xml_cdata") {
 				hasNestedXML = true
-				break
 			}
+		}
+		if !hasSelectedXML {
+			return false, "所选参数不是 XML 插入点"
 		}
 		if !strings.Contains(contentType, "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") && !hasNestedXML {
 			return false, "请求体不是 XML"
@@ -137,7 +158,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !strings.Contains(contentType, "multipart/form-data") {
 			return false, "请求不是 multipart 文件上传"
 		}
-		if _, ok := request.FirstMultipartFile(); !ok {
+		if len(ScopedMultipartFiles(request, scope)) == 0 {
 			return false, "multipart 中没有文件字段"
 		}
 	case "mass_assignment", "mass_assignment_extended":
@@ -162,7 +183,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 			return false, "没有 LIMIT/OFFSET 或分页候选参数"
 		}
 	case "path_normalization":
-		if len(httpraw.SessionPoints(request, cfg.SessionIdentifiers)) == 0 {
+		if len(scopedSessionPoints(request, cfg, scope, false)) == 0 {
 			return false, "请求中没有可识别会话"
 		}
 	case "parameter_confusion":
@@ -173,7 +194,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 				break
 			}
 		}
-		if !hasDuplicateCandidate && len(httpraw.SessionPoints(request, cfg.SessionIdentifiers)) == 0 {
+		if !hasDuplicateCandidate && len(scopedSessionPoints(request, cfg, scope, false)) == 0 {
 			return false, "没有可重复的参数或会话凭据"
 		}
 	case "unauthorized":
@@ -190,18 +211,11 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 			return false, "未发现序列化内容类型或候选字段"
 		}
 	case "jwt_active":
-		found := false
-		for _, header := range request.Headers {
-			if _, _, ok := bearerJWT(header.Value); ok {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if len(jwtCandidatesScopedExcluded(request, points, scope, cfg.ExcludedParameterNames)) == 0 {
 			return false, "请求头中没有 JWT"
 		}
 	case "proxy_trust_bypass":
-		if len(httpraw.SessionPoints(request, httpraw.EffectiveSessionIdentifiers(request, cfg.SessionIdentifiers))) == 0 {
+		if len(scopedSessionPoints(request, cfg, scope, true)) == 0 {
 			return false, "请求中没有可移除的会话凭据"
 		}
 	case "csrf":
@@ -231,7 +245,7 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 		if !smsURLMatches(request, cfg.PluginRules[id].URLKeywords) {
 			return false, "URL 未匹配短信接口关键字"
 		}
-		if !hasNamed(cfg.PluginRules[id].ParameterNames) {
+		if !hasControlledNamed(points, cfg.PluginRules[id].ParameterNames) {
 			return false, "没有匹配手机号语义的参数"
 		}
 	case "command_injection", "command_injection_oast", "command_injection_timing":
@@ -258,7 +272,20 @@ func pluginApplicable(id string, request *httpraw.Request, points []httpraw.Inse
 	return true, ""
 }
 
+func hasControlledNamed(points []httpraw.InsertionPoint, names []string) bool {
+	for _, point := range points {
+		if controlledSemanticName(point.Name, names) {
+			return true
+		}
+	}
+	return false
+}
+
 func estimateRequests(id string, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config) int {
+	return estimateRequestsScoped(id, request, points, mode, cfg, nil)
+}
+
+func estimateRequestsScoped(id string, request *httpraw.Request, points []httpraw.InsertionPoint, mode string, cfg config.Config, scope []string) int {
 	count := max(estimatedPointCount(id, points, cfg), 1)
 	switch id {
 	case "sqli_deep":
@@ -337,7 +364,11 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		} else if id == "ssti" {
 			multiplier = 2
 		}
-		return count * max(1, len(payloadsForMode(cfg.PluginRules[id], mode))) * multiplier
+		payloads := payloadsForMode(cfg.PluginRules[id], mode)
+		if id == "file_read" || id == "file_read_encoded" {
+			payloads = fileReadPayloadsForMode(cfg.PluginRules[id], mode)
+		}
+		return count * max(1, len(payloads)) * multiplier
 	case "graphql_security", "graphql_alias_abuse":
 		return max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*2)
 	case "java_deserialization":
@@ -363,7 +394,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "path_normalization":
 		return 9
 	case "parameter_confusion":
-		candidates := count + len(httpraw.SessionPoints(request, cfg.SessionIdentifiers))
+		candidates := count + len(scopedSessionPoints(request, cfg, scope, false))
 		return min(candidates, 12) * 4
 	case "sms_abuse":
 		if !smsURLMatches(request, cfg.PluginRules[id].URLKeywords) {
@@ -371,7 +402,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 		}
 		n := 0
 		for _, point := range points {
-			if semanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
+			if controlledSemanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
 				n++
 			}
 		}
@@ -398,7 +429,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "shiro":
 		return 1 + len(payloadsForMode(cfg.PluginRules[id], mode))
 	case "jwt_active":
-		return max(1, len(jwtCandidates(request, points))*3)
+		return max(1, len(jwtCandidatesScopedExcluded(request, points, scope, cfg.ExcludedParameterNames))*3)
 	case "proxy_trust_bypass":
 		return 9
 	case "http_trace":
@@ -415,7 +446,7 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 	case "unauthorized":
 		return 2
 	case "file_upload", "file_upload_execution":
-		return max(1, len(request.MultipartFiles())) * max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*3)
+		return max(1, len(ScopedMultipartFiles(request, scope))) * max(1, len(payloadsForMode(cfg.PluginRules[id], mode))*3)
 	case "cors":
 		return max(1, len(payloadsForMode(cfg.PluginRules[id], mode)))
 	case "api_exposure", "spring_actuator":
@@ -435,7 +466,6 @@ func estimateRequests(id string, request *httpraw.Request, points []httpraw.Inse
 
 func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.Config) int {
 	switch id {
-<<<<<<< HEAD
 	case "file_read", "file_read_encoded":
 		n := 0
 		for _, point := range points {
@@ -447,13 +477,11 @@ func estimatedPointCount(id string, points []httpraw.InsertionPoint, cfg config.
 	case "sms_abuse":
 		n := 0
 		for _, point := range points {
-			if semanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
+			if controlledSemanticName(point.Name, cfg.PluginRules[id].ParameterNames) {
 				n++
 			}
 		}
 		return n
-=======
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 	case "sqli", "sqli_deep", "sqli_extended", "sqli_timing":
 		return len(prioritizeSQLPoints(points))
 	case "sqli_order_by", "sqli_limit":

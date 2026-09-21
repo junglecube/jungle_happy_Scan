@@ -44,7 +44,7 @@ func (p SMSAbuse) Scan(ctx *Context) ([]model.Finding, error) {
 	patterns := compileDetectionPatterns(rule.Patterns)
 	var points []httpraw.InsertionPoint
 	for _, point := range ctx.Points {
-		if semanticName(point.Name, rule.ParameterNames) {
+		if controlledSemanticName(point.Name, rule.ParameterNames) {
 			points = append(points, point)
 		}
 	}

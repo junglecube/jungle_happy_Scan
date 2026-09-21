@@ -33,13 +33,13 @@ func TestV39OldConfigMigrationPreservesSettingsAndBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := store.Get()
-	if got.ConfigVersion != 34 || got.Listen != cfg.Listen || !got.RedactEvidence || got.CallbackBaseURL != "" || !reflect.DeepEqual(got.NormalPlugins, cfg.NormalPlugins) || !reflect.DeepEqual(got.PluginRules["file_read"], cfg.PluginRules["file_read"]) {
+	if got.ConfigVersion != 35 || got.Listen != cfg.Listen || !got.RedactEvidence || got.CallbackBaseURL != "" || !reflect.DeepEqual(got.NormalPlugins, cfg.NormalPlugins) || !reflect.DeepEqual(got.PluginRules["file_read"], cfg.PluginRules["file_read"]) {
 		t.Fatal("migration overwrote user configuration")
 	}
 	if got.SMS.Attempts != 30 || got.CallbackLateSeconds != 120 {
 		t.Fatal("missing defaults")
 	}
-	backup, err := os.ReadFile(path + ".pre-v34.bak")
+	backup, err := os.ReadFile(path + ".pre-v35.bak")
 	if err != nil || !bytes.Equal(backup, raw) {
 		t.Fatal("backup is not exact old file")
 	}

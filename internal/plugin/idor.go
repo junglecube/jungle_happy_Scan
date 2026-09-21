@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"jungle_happy_Scan/internal/diff"
 	"jungle_happy_Scan/internal/httpraw"
@@ -75,6 +76,75 @@ func semanticName(name string, configured []string) bool {
 	for _, candidate := range configured {
 		candidate = strings.ToLower(strings.TrimSpace(candidate))
 		if lower == candidate || (len(candidate) > 2 && strings.HasSuffix(lower, candidate)) {
+			return true
+		}
+	}
+	return false
+}
+
+// controlledSemanticName expands the conservative exact/suffix matcher only
+// for parameter families whose wire names commonly carry harmless wrappers or
+// indexes (phonekey, filename1, file_name[0], pathValue). It deliberately
+// requires a known modifier after/before the configured term, avoiding a
+// broad substring match that would spray state-changing endpoints.
+func controlledSemanticName(name string, configured []string) bool {
+	nameCompact := semanticNameCompact(name)
+	if nameCompact == "" {
+		return false
+	}
+	for _, rawCandidate := range configured {
+		candidate := semanticNameCompact(rawCandidate)
+		if candidate == "" {
+			continue
+		}
+		if nameCompact == candidate {
+			return true
+		}
+		if strings.HasPrefix(nameCompact, candidate) && semanticModifier(nameCompact[len(candidate):]) {
+			return true
+		}
+		if strings.HasSuffix(nameCompact, candidate) && semanticModifier(nameCompact[:len(nameCompact)-len(candidate)]) {
+			return true
+		}
+	}
+	return false
+}
+
+func semanticNameCompact(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	for _, r := range value {
+		if unicode.IsLetter(r) {
+			builder.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		if unicode.IsDigit(r) {
+			builder.WriteRune(r)
+			continue
+		}
+		// Separators are ignored so file_name, file-name and file.name share
+		// the same semantic form.
+	}
+	compact := builder.String()
+	compact = strings.TrimRightFunc(compact, unicode.IsDigit)
+	return compact
+}
+
+func semanticModifier(value string) bool {
+	if value == "" {
+		return true
+	}
+	for _, modifier := range []string{
+		"key", "no", "num", "number", "id", "ids", "value", "values", "val",
+		"field", "fields", "param", "parameter", "input", "name", "index", "idx",
+		"code", "type", "data", "list", "array", "text", "request", "response",
+		"source", "target", "download", "upload", "receiver", "sender", "mobile", "phone",
+		"file", "path", "template", "resource", "document", "attachment", "filename", "filepath", "backup", "sms",
+	} {
+		if value == modifier {
 			return true
 		}
 	}

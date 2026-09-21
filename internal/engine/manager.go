@@ -53,6 +53,7 @@ type Task struct {
 	id                string
 	cfg               config.Config
 	request           *httpraw.Request
+	parameterScope    []string
 	autoScheme        bool
 	plugins           []plugin.Plugin
 	status            string
@@ -477,10 +478,11 @@ func (m *Manager) Plan(input model.ScanInput) (model.ScanPlan, error) {
 	if err != nil {
 		return model.ScanPlan{}, err
 	}
-	points := httpraw.DiscoverAdvanced(request, cfg)
+	parameterScope := httpraw.NormalizeParameterScope(input.ParameterScope)
+	points := httpraw.FilterInsertionPoints(httpraw.DiscoverAdvanced(request, cfg), parameterScope)
 	baselineSamples := baselineSamplesFor(request.Method, cfg.BaselineSamples)
 	budget := max(0, cfg.MaxRequests-baselineSamples)
-	plans := plugin.BuildExecutionPlans(selected, request, points, mode, cfg, budget)
+	plans := plugin.BuildExecutionPlansWithScope(selected, request, points, mode, cfg, budget, parameterScope)
 	preview := model.ScanPlan{
 		Mode: mode, Method: request.Method, DiscoveredPoints: len(points), RequestBudget: budget,
 		Plugins: make(map[string]model.PluginCoverage, len(plans)),
@@ -592,7 +594,7 @@ func (m *Manager) create(input model.ScanInput, preflight *ConnectivityResult) (
 	ctx, cancel := context.WithCancel(context.Background())
 	expireCtx, expireCancel := context.WithCancel(context.Background())
 	task := &Task{
-		id: newID("scan"), cfg: cfg, request: request, autoScheme: autoScheme, plugins: selected,
+		id: newID("scan"), cfg: cfg, request: request, parameterScope: httpraw.NormalizeParameterScope(input.ParameterScope), autoScheme: autoScheme, plugins: selected,
 		status: "queued", createdAt: time.Now().UTC(), ctx: ctx, cancel: cancel,
 		subs:              make(map[int]chan Event),
 		done:              make(chan struct{}),
@@ -768,7 +770,7 @@ func (m *Manager) run(task *Task, mode string) {
 	if stability < 0.75 {
 		task.addWarning(fmt.Sprintf("基线响应稳定度较低（%.2f），主动差分结果会更保守", stability))
 	}
-	points := httpraw.DiscoverAdvanced(task.request, task.cfg)
+	points := httpraw.FilterInsertionPoints(httpraw.DiscoverAdvanced(task.request, task.cfg), task.parameterScope)
 	representativeBaseline := baselines[diff.RepresentativeBaselineIndex(baselines, task.cfg)]
 	sendFunc := client.Send
 	if len(task.cfg.ResponseExtractors) > 0 {
@@ -832,7 +834,7 @@ func (m *Manager) run(task *Task, mode string) {
 		if !sensitiveEnabled {
 			return
 		}
-		passive := &plugin.Context{Context: task.ctx, Request: request, Baseline: response, Config: task.cfg, Progress: func(string, int, int) {}}
+		passive := &plugin.Context{Context: task.ctx, Request: request, Baseline: response, Config: task.cfg, ParameterScope: task.parameterScope, Progress: func(string, int, int) {}}
 		results, _ := (plugin.SensitiveData{}).Scan(passive)
 		var novel []model.Finding
 		for _, finding := range results {
@@ -852,7 +854,7 @@ func (m *Manager) run(task *Task, mode string) {
 		}
 	}
 	availableBudget := max(0, task.cfg.MaxRequests-baselineSamples)
-	plans := plugin.BuildExecutionPlans(task.plugins, task.request, points, mode, task.cfg, availableBudget)
+	plans := plugin.BuildExecutionPlansWithScope(task.plugins, task.request, points, mode, task.cfg, availableBudget, task.parameterScope)
 	allocatedBudget := 0
 	for _, plan := range plans {
 		allocatedBudget += plan.Budget
@@ -935,7 +937,7 @@ func (m *Manager) run(task *Task, mode string) {
 		}
 		ctx := &plugin.Context{
 			ActivePluginID: meta.ID, Context: task.ctx, Request: task.request, Baselines: baselines, Baseline: representativeBaseline,
-			Points: points, Mode: mode, Config: task.cfg, Callbacks: m.callbacks,
+			Points: points, ParameterScope: task.parameterScope, Mode: mode, Config: task.cfg, Callbacks: m.callbacks,
 			SendFunc:          sendFunc,
 			OnResponse:        observeResponse,
 			OnLateFindings:    func(items []model.Finding) { task.addFindings(items) },

@@ -82,7 +82,11 @@ func buildPrecedenceProbes(ctx *Context) []precedenceProbe {
 		sessionSet[strings.ToLower(strings.TrimSpace(key))] = true
 	}
 	points := append([]httpraw.InsertionPoint(nil), ctx.Points...)
-	points = append(points, httpraw.SessionPoints(ctx.Request, ctx.Config.SessionIdentifiers)...)
+	for _, point := range scopedSessionPoints(ctx.Request, ctx.Config, ctx.ParameterScope, false) {
+		if !containsInsertionPoint(points, point) {
+			points = append(points, point)
+		}
+	}
 	// This plugin has one deterministic capability. Presets only decide whether
 	// it is selected; they do not silently halve its coverage.
 	limit := 12

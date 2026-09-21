@@ -59,16 +59,10 @@ func probeSQLTiming(ctx *Context, meta model.PluginMeta, point httpraw.Insertion
 	zeroSQL, ok := sqlTimingDose(pair, 0)
 	shortSQL, shortOK := sqlTimingDose(pair, shortDose)
 	if !ok || !shortOK {
-<<<<<<< HEAD
 		ctx.CoverageIssue("时间规则 " + pair.right.Name + " 不支持双剂量适配；仅支持 SLEEP/pg_sleep")
 		// Custom timing functions need a dose-aware adapter; do not silently
 		// promote an unverifiable custom delay into a confirmed vulnerability.
 		ctx.ResolveMutationFailed(slots)
-=======
-		// Custom timing functions need a dose-aware adapter; do not silently
-		// promote an unverifiable custom delay into a confirmed vulnerability.
-		ctx.ResolveAdaptivePruned(slots)
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 		progress(slots)
 		return model.Finding{}, false, nil
 	}
@@ -118,7 +112,6 @@ func probeSQLTiming(ctx *Context, meta model.PluginMeta, point httpraw.Insertion
 	longTwo := responses[2].Elapsed - responses[3].Elapsed
 	short := responses[4].Elapsed - (responses[3].Elapsed+responses[5].Elapsed)/2
 	longMean := (longOne + longTwo) / 2
-<<<<<<< HEAD
 	// Repeated evaluation over rows can multiply both doses. Require a common
 	// bounded scale instead of assuming the database calls sleep exactly once.
 	scale := float64(longMean) / float64(expected)
@@ -129,12 +122,6 @@ func probeSQLTiming(ctx *Context, meta model.PluginMeta, point httpraw.Insertion
 	if min(longOne, longTwo) < margin || absDuration(longOne-longTwo) > max(noise, expected/3) ||
 		absDuration(short-scaledShort) > max(noise, scaledShort/3) || short < scaledShort/2 ||
 		absDuration(longMean-2*short) > max(noise, longMean/4) {
-=======
-	if min(longOne, longTwo) < margin || absDuration(longOne-longTwo) > max(noise, expected/3) ||
-		absDuration(longMean-expected) > max(noise, expected/3) ||
-		absDuration(short-shortDose) > max(noise, shortDose/3) || short < shortDose/2 ||
-		absDuration((longMean-short)-(expected-shortDose)) > max(noise, expected/4) {
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 		return model.Finding{}, false, nil
 	}
 	roles := []string{"control", "delay", "delay", "control", "short_delay", "control"}
@@ -143,11 +130,7 @@ func probeSQLTiming(ctx *Context, meta model.PluginMeta, point httpraw.Insertion
 		metrics := sqlPairMetrics(pair, i+1, roles[i], "L4", map[string]any{
 			"elapsed_ms": responses[i].Elapsed.Milliseconds(), "expected_delay_ms": expected.Milliseconds(),
 			"short_delay_ms": shortDose.Milliseconds(), "local_jitter_ms": jitter.Milliseconds(),
-<<<<<<< HEAD
 			"dose_scale": scale, "dose_confirmed": true, "long_delta_ms": longMean.Milliseconds(), "short_delta_ms": short.Milliseconds(),
-=======
-			"dose_confirmed": true, "long_delta_ms": longMean.Milliseconds(), "short_delta_ms": short.Milliseconds(),
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 			"payload_rule": pair.right.Name,
 		})
 		metrics["pair_order"] = "A-B-B-A-C-A"

@@ -193,11 +193,44 @@ func excludedInsertionPoint(point InsertionPoint, excluded []string) bool {
 	if excludedParameter(point.Name, excluded) {
 		return true
 	}
+	// Cookie is a special, commonly used exclusion entry in the persistent
+	// configuration.  It means the whole Cookie header's key/value collection,
+	// rather than a cookie whose literal name happens to be "Cookie".  Keep the
+	// ordinary name matching above so a query/form field named Cookie remains
+	// excluded as before.
+	if point.Location == "cookie" && excludedCookieLocation(excluded) {
+		return true
+	}
 	if point.Location != "json" && point.Location != "graphql_variable" {
 		return false
 	}
 	for _, token := range parsePath(point.Path) {
 		if token.index < 0 && excludedParameter(token.key, excluded) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsExcludedInsertionPoint exposes the same persistent exclusion semantics to
+// plugins that derive special candidates directly from the request (for
+// example JWT values in Cookie) instead of consuming DiscoverAdvanced points.
+func IsExcludedInsertionPoint(point InsertionPoint, excluded []string) bool {
+	if excludedInsertionPoint(point, excluded) {
+		return true
+	}
+	for parent := point.parent; parent != nil; parent = parent.parent {
+		if excludedInsertionPoint(*parent, excluded) {
+			return true
+		}
+	}
+	return false
+}
+
+func excludedCookieLocation(excluded []string) bool {
+	for _, candidate := range excluded {
+		value := strings.TrimSpace(candidate)
+		if strings.EqualFold(value, "cookie") || strings.EqualFold(value, "header:cookie") {
 			return true
 		}
 	}

@@ -14,6 +14,12 @@ func NormalizeSQLPluginIDs(ids []string, normal bool) []string {
 	for _, id := range ids {
 		id = strings.TrimSpace(id)
 		switch id {
+		case "file_read_encoded":
+			// V3.12 keeps the old ID as an input alias while the persisted and
+			// public rule set uses one unified file_read plugin. Explicit legacy
+			// selections are handled by plugin.Select so they can still force
+			// the deep payload tier.
+			id = "file_read"
 		case "sqli_extended":
 			if normal {
 				id = "sqli"

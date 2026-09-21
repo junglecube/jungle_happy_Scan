@@ -37,11 +37,16 @@ func (p XXEExtended) Scan(ctx *Context) ([]model.Finding, error) { return scanXX
 type FileReadEncoded struct{}
 
 func (FileReadEncoded) Meta() model.PluginMeta {
-	return StandardMeta("file_read_encoded", "任意文件读取编码绕过", "执行双重编码、路径混淆及扩展 Linux 文件目标检查。", "active", true)
+	return FileRead{}.Meta()
 }
 
 func (p FileReadEncoded) Scan(ctx *Context) ([]model.Finding, error) {
-	return scanFileRead(ctx, p.Meta())
+	// Compatibility adapter for clients that still submit the removed legacy
+	// ID. Findings and progress are emitted under the unified file_read plugin,
+	// while forcing the deep payload tier that the old ID represented.
+	clone := *ctx
+	clone.Mode = "deep"
+	return scanFileRead(&clone, FileRead{}.Meta())
 }
 
 type FileUploadExecution struct{}

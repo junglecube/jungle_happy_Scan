@@ -44,21 +44,11 @@ func (p SensitiveData) Scan(ctx *Context) ([]model.Finding, error) {
 			if !validConfiguredSensitiveMatch(validator, value) {
 				continue
 			}
-<<<<<<< HEAD
 			count++
 			if len(samples) < 5 && !seen[value] {
 				samples = append(samples, value)
 				seen[value] = true
 			}
-=======
-			matches = append(matches, struct {
-				label      string
-				value      string
-				severity   model.Severity
-				confidence model.Confidence
-			}{configured.Name, value, model.ParseSeverity(configured.Severity, model.SeverityLow), confidence(configured.Confidence, model.ConfidenceFirm)})
-			break
->>>>>>> 7e660119acdb144ab49f86bcfe0d35e79c6f9929
 		}
 		if count == 0 {
 			continue
