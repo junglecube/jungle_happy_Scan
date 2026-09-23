@@ -83,6 +83,23 @@ func TestJWTCandidatesIncludeSessionCookieAndNestedJSON(t *testing.T) {
 	}
 }
 
+func TestJWTCandidatesHonorWholeCookieExclusion(t *testing.T) {
+	header, _ := json.Marshal(map[string]any{"alg": "HS256"})
+	claims, _ := json.Marshal(map[string]any{"sub": "alice"})
+	token := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims) + ".signature"
+	request, err := httpraw.Parse("POST /check HTTP/1.1\r\nHost: bank.test\r\nCookie: accessToken="+token+"\r\nContent-Type: application/json\r\n\r\n{\"auth\":{\"token\":\""+token+"\"}}", "https")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.ExcludedParameterNames = []string{"Cookie"}
+	points := httpraw.DiscoverAdvanced(request, cfg)
+	candidates := jwtCandidatesScopedExcluded(request, points, nil, cfg.ExcludedParameterNames)
+	if len(candidates) != 1 || candidates[0].point == nil || candidates[0].point.Location == "cookie" {
+		t.Fatalf("whole Cookie exclusion leaked a Cookie JWT or removed JSON JWT: %+v", candidates)
+	}
+}
+
 func TestNewHighConfidencePlugins(t *testing.T) {
 	t.Run("jwt-none", func(t *testing.T) {
 		header, _ := json.Marshal(map[string]any{"alg": "HS256", "typ": "JWT"})

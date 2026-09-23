@@ -20,7 +20,7 @@ func (p JWTWeak) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
 	ctx.Progress(meta.ID, 1, 1)
 	var findings []model.Finding
-	for _, candidate := range jwtCandidates(ctx.Request, ctx.Points) {
+	for _, candidate := range jwtCandidatesScopedExcluded(ctx.Request, ctx.Points, ctx.ParameterScope, ctx.Config.ExcludedParameterNames) {
 		token := candidate.raw
 		parts := strings.Split(token, ".")
 		if len(parts) != 3 || !strings.HasPrefix(parts[0], "eyJ") {

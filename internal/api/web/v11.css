@@ -366,6 +366,41 @@ body {
   border-color: #75a98a;
   box-shadow: 0 0 0 4px rgba(24, 115, 74, .09);
 }
+.parameter-scope-panel {
+  margin-top: 11px;
+  padding: 11px 12px;
+  border: 1px solid #dce5df;
+  border-radius: 10px;
+  background: #f8fbf9;
+}
+.parameter-scope-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.parameter-scope-head strong,
+.parameter-scope-head small { display: block; }
+.parameter-scope-head strong { color: #33453b; font-size: 12px; }
+.parameter-scope-head small { margin-top: 3px; color: #66736d; font-size: 10px; line-height: 1.45; }
+.parameter-scope-input {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  max-height: 180px;
+  resize: vertical;
+  border: 1px solid #d7dfdc;
+  border-radius: 8px;
+  background: white;
+  color: #33453b;
+  padding: 9px 10px;
+  outline: 0;
+  font: 11px/1.55 var(--mono);
+}
+.parameter-scope-controls { display: flex; align-items: flex-start; gap: 9px; }
+.parameter-scope-controls .parameter-scope-input { flex: 1; }
+.parameter-scope-controls .test-button { flex: 0 0 auto; min-height: 34px; }
+.parameter-scope-input:focus { border-color: #75a98a; box-shadow: 0 0 0 3px rgba(24, 115, 74, .08); }
 /* Connectivity and finding responses use the same visual language as the raw
    request editor: light paper, HTTP token colors, and identical monospace flow. */
 .connectivity-result { background: #f7faf8; border-color: #d7dfdc; }
@@ -375,7 +410,7 @@ body {
 .client-tls-upload{border:1px solid #b9d1c2!important;border-radius:8px!important;background:#fff!important;padding:7px 10px!important}.client-tls-name{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#526159;font-size:10px}
 .signature-row select,.signature-endpoint{border:1px solid #b9d1c2;border-radius:8px;background:#fff;color:#33453b;padding:7px 9px;font-size:11px}.signature-endpoint{width:240px}
 .client-tls-password{width:170px;border:1px solid #dce5df;border-radius:8px;padding:7px 9px;background:#fff;font-size:10px}
-@media(max-width:680px){.client-tls-row{align-items:stretch;flex-direction:column}.client-tls-label{margin-right:0}.client-tls-name,.client-tls-password{max-width:none;width:100%}}
+@media(max-width:680px){.client-tls-row{align-items:stretch;flex-direction:column}.client-tls-label{margin-right:0}.client-tls-name,.client-tls-password{max-width:none;width:100%}.parameter-scope-controls{align-items:stretch;flex-direction:column}.parameter-scope-controls .test-button{width:100%}}
 .connectivity-result #connectivity-response {
   height: 620px;
   background: var(--http-paper);
@@ -884,13 +919,14 @@ body {
 .config-plugin-picker { display: grid; gap: 16px; margin: 22px 0; }
 .config-plugin-group { --config-tone: #367757; --config-bg: #f1f8f3; border-left: 3px solid var(--config-tone); padding: 12px 16px; background: var(--config-bg); border-radius: 10px; }
 .config-plugin-group h3 { margin: 0 0 10px; font-size: 14px; color: var(--config-tone); }
-.config-plugin-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.config-plugin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .config-plugin-entry { min-width: 0; display: block; }
-.config-plugin-entry.expanded { display: block; }
+.config-plugin-entry.expanded { display: block; grid-column: 1 / -1; }
 .config-plugin-entry.expanded .config-plugin-card { width: 100%; }
 .config-plugin-entry.expanded #config-plugin-detail { margin-top: 10px; }
 .config-plugin-card { width: 100%; text-align: left; background: white; cursor: pointer; font: inherit; }
 .config-plugin-card[aria-pressed="true"] { border-color: var(--config-tone); box-shadow: inset 0 0 0 1px var(--config-tone); background: var(--config-bg); }
+.config-plugin-card .plugin-code { display:block; margin-top:3px; color:var(--config-tone); font-size:10px; letter-spacing:.02em; }
 .config-plugin-card[aria-pressed="true"] strong::after { content: ' · 当前'; color: var(--config-tone); }
 .config-plugin-card:focus-visible { outline: 3px solid var(--config-tone); outline-offset: 2px; }
 .tone-0 { --config-tone:#386aa2; --config-bg:#f0f5fc; }
@@ -902,5 +938,5 @@ body {
 #config-plugin-detail { border-top: 1px solid #d9e4dc; padding: 16px; border-radius: 10px; background: rgba(255,255,255,.72); }
 #config-plugin-detail .rule-toolbar { justify-content: space-between; }
 #settings-form [hidden] { display:none !important; }
-@media(max-width:1000px) { .config-plugin-grid { grid-template-columns:1fr; } }
+@media(max-width:1000px) { .config-plugin-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 @media(max-width:560px) { .config-plugin-grid { grid-template-columns:1fr; } .config-plugin-group { padding:12px; } }

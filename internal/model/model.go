@@ -163,8 +163,12 @@ type PluginMeta struct {
 }
 
 type ScanInput struct {
-	HTTP              string            `json:"http"`
-	ScanType          []string          `json:"scan_type"`
+	HTTP     string   `json:"http"`
+	ScanType []string `json:"scan_type"`
+	// ParameterScope optionally limits active plugins to the selected insertion
+	// point names. It is intentionally additive so existing clients that omit it
+	// keep scanning every eligible point.
+	ParameterScope    []string          `json:"parameter_scope,omitempty"`
 	HTTPRequest       string            `json:"http_request,omitempty"`
 	Plugins           []string          `json:"plugins,omitempty"`
 	Mode              string            `json:"mode,omitempty"`

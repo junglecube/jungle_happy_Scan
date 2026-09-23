@@ -541,7 +541,7 @@ func TestV2RegistryAndDefaultRuleCoverage(t *testing.T) {
 		t.Fatalf("expected exactly 48 registered plugins, got %d", len(All()))
 	}
 	cfg := config.Default()
-	for _, id := range []string{"unauthorized", "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe", "xxe_extended", "file_read", "file_read_encoded", "file_upload", "file_upload_execution", "cors", "reflected_xss", "ssrf", "open_redirect", "crlf_injection", "ssti", "command_injection", "command_injection_oast", "command_injection_timing", "csrf", "error_disclosure", "error_disclosure_extended", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mass_assignment_extended", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "graphql_alias_abuse", "sms_abuse", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "host_header_injection"} {
+	for _, id := range []string{"unauthorized", "sqli", "sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe", "xxe_extended", "file_read", "file_upload", "file_upload_execution", "cors", "reflected_xss", "reflected_xss_deep", "ssrf", "open_redirect", "crlf_injection", "ssti", "command_injection", "command_injection_oast", "command_injection_timing", "csrf", "error_disclosure", "error_disclosure_extended", "nosql_injection", "ldap_injection", "xpath_injection", "java_deserialization", "method_override", "mass_assignment", "mass_assignment_extended", "mybatis_dynamic_sql", "json_polymorphic", "graphql_security", "graphql_alias_abuse", "sms_abuse", "shiro", "java_expression", "java_expression_extended", "jndi_injection", "host_header_injection"} {
 		if len(cfg.PluginRules[id].Payloads) == 0 {
 			t.Fatalf("payload-driven plugin %s has no Web-configurable defaults", id)
 		}
@@ -564,7 +564,7 @@ func TestScanPresets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(passive) != 3 || len(normal) != 8 || len(deep) != 47 {
+	if len(passive) != 3 || len(normal) != 8 || len(deep) != 46 {
 		t.Fatalf("unexpected preset sizes: passive=%d normal=%d deep=%d", len(passive), len(normal), len(deep))
 	}
 	for _, required := range []string{"sqli", "file_upload", "file_read", "reflected_xss", "unauthorized", "xxe", "sms_abuse", "sensitive_data"} {
@@ -575,6 +575,33 @@ func TestScanPresets(t *testing.T) {
 	selected, err := Select([]string{"sqli_timing"}, "passive")
 	if err != nil || len(selected) != 1 || selected[0].Meta().ID != "sqli_deep" {
 		t.Fatalf("explicit plugin selection must not be filtered by compatibility mode: selected=%#v err=%v", selected, err)
+	}
+}
+
+func TestControlledSemanticNameMatching(t *testing.T) {
+	names := []string{"phone", "filename", "file", "path", "template"}
+	for _, value := range []string{"phonekey", "mobile_phone", "filename1", "file_name[0]", "downloadPath", "pathValue", "template_name"} {
+		if !controlledSemanticName(value, names) {
+			t.Fatalf("controlled matcher did not recognize %q", value)
+		}
+	}
+	for _, value := range []string{"phonebook", "filetypex"} {
+		if controlledSemanticName(value, names) {
+			t.Fatalf("controlled matcher overmatched %q", value)
+		}
+	}
+}
+
+func TestUnifiedFileReadPayloadTiersAndLegacyAlias(t *testing.T) {
+	rule := config.Default().PluginRules["file_read"]
+	quick := fileReadPayloadsForMode(rule, "standard")
+	deep := fileReadPayloadsForMode(rule, "deep")
+	if len(deep) <= len(quick) || len(quick) == 0 {
+		t.Fatalf("file-read mode tiers are not distinct: quick=%d deep=%d", len(quick), len(deep))
+	}
+	selected, err := Select([]string{"file_read_encoded"}, "standard")
+	if err != nil || len(selected) != 1 || selected[0].Meta().ID != "file_read" {
+		t.Fatalf("legacy file-read ID was not unified: selected=%#v err=%v", selected, err)
 	}
 }
 

@@ -107,12 +107,12 @@ V3.8.3 SQL 选择：`scan_type:["sqli"]` 为快速；`scan_type:["sqli_deep"]` �
 - `POST /api/v2/jungle_happy_scan_lite`
 - `GET /api/v2/plugins`
 
-V3.8.3 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `client_tls_file` 与 `client_tls_password`；只传 `http` 时仍默认 Normal 与 Auto。V2 返回使用 `api_version: "2.0"`（接口主版本保持兼容）、`rule_pack_version: "3.8.3"` 和当前持久规则内容的 `rule_pack_digest`，并将机器字段与中文展示字段分离：
+V3.13.0 同步接口保留 `http`、`scan_type`、`scheme`、`host`、可选 `client_tls_file` 与 `client_tls_password`；只传 `http` 时仍默认 Normal 与 Auto。`/api/v1/plan` 和 `/api/v1/scan` 额外接受可选 `parameter_scope` 数组（例如 `["number"]` 或 `["query:userId"]`），空数组或省略表示扫描全部符合插件规则的参数。V2 返回使用 `api_version: "2.0"`（接口主版本保持兼容）、`rule_pack_version: "3.13.0"` 和当前持久规则内容的 `rule_pack_digest`，并将机器字段与中文展示字段分离：
 
 ```json
 {
   "api_version": "2.0",
-  "rule_pack_version": "3.8.3",
+  "rule_pack_version": "3.13.0",
   "rule_pack_digest": "sha256:0123456789abcdef01234567",
   "findings": [{
     "severity": "high",
@@ -158,11 +158,12 @@ V2 Full 的 `evidence.request` 和 `evidence.response` 是漏洞证据视图：�
 - `http`：必填，Burp Suite Raw HTTP 报文，最大 5 MB；也接受别名 `http_request`。
 - `scheme`：可选，`auto`、`http` 或 `https`。默认 `auto`；固定先尝试 HTTP，连接或协议失败后再尝试 HTTPS，并让本次扫描继续沿用成功协议。
 - `scan_type`：必填，插件 ID 数组；也接受别名 `plugins`。`["all"]` 运行全部插件。
+- `parameter_scope`：可选，参数选择器数组；支持 `name`、`location:name` 和前端使用的 `[name]` 文本形式。省略或为空表示不限制参数。
 - `mode`：仅为 V1 客户端兼容而继续接受 `passive`、`normal`、`standard` 或 `deep`（也接受别名 `scan_mode`），不再改变所选插件的 Payload 或执行逻辑。新调用方应省略此字段。
 - `client_tls_file`：可选，扫描器服务器上的 PEM/PFX/P12 绝对路径。PEM 文件必须同时包含客户端证书链和未加密私钥。
 - `client_tls_password`：可选，仅用于 PFX/P12；不写入持久配置、日志或漏洞报告。
 
-Web 页面提交勾选后的插件 ID。V3.8.3 Normal 默认选 8 项（含 SQL 快速），Deep 选 47 项（SQL 深度包含快速并去重），公开插件共 48 项。SQL 仅保留 sqli（快速）与 sqli_deep（深度），后者包含时间盲注和旧专项能力。OAST 等其他漏洞族仍有独立 ID。
+Web 页面提交勾选后的插件 ID。V3.13.0 Normal 默认选 8 项（含 SQL 快速），Deep 选 46 项（SQL 深度包含快速并去重），公开插件共 48 项。文件读取统一为 `file_read`，旧 `file_read_encoded` 仍可作为深度兼容输入。SQL 仅保留 sqli（快速）与 sqli_deep（深度），后者包含时间盲注和旧专项能力。OAST 等其他漏洞族仍有独立 ID。
 
 响应状态为 `202`：
 
@@ -337,7 +338,7 @@ curl -sS http://127.0.0.1:8888/api/v1/scans/scan_xxx/result
 
 程序同时启动两类独立离线回连监听：HTTP 默认 `0.0.0.0:61166`，LDAP/JNDI 默认 `0.0.0.0:61167`。HTTP 端口只处理 `/api/v1/callback/{token}` 和 `/callback/{token}`；LDAP 端口只完成最小匿名 Bind，以便接收包含随机 Token 的搜索 DN，绝不返回目录条目、远程类或序列化对象。两者均不暴露扫描、配置或管理接口。回连基础地址必须配置为目标服务器可访问的扫描器地址。
 
-- `POST /api/v1/parse`：解析报文并返回插入点，不访问目标。
+- `POST /api/v1/parse`：解析报文并返回插入点和按所选插件分组的 `plugin_parameters`，不访问目标。前端“参数解析”按钮使用此路由；持久配置排除项已在返回前过滤。
 - `POST /api/v1/plan`：生成适用性、请求预算和预计耗时计划，不访问目标。
 - `POST /api/v1/connectivity`：只发送一次原始报文，返回实际协议、状态码、耗时、Header、Body 和 Raw Response；网络失败也返回 `200`，此时 `ok=false` 并包含中文诊断。
 - `POST /api/v1/replays`：高并发重放/爆破单条 Raw HTTP 报文。支持 `{{int(min-max)}}`、`{{integer(min-max)}}` 和 `{{x(dict)}}` 占位符；整数会保留补零宽度，例如 `{{int(0000-9999)}}`。没有占位符时按 `repeat` 重复原始报文。任务创建后使用下面两个接口轮询摘要和按需读取单条响应详情。

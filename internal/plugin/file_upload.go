@@ -26,7 +26,7 @@ func (p FileUpload) Scan(ctx *Context) ([]model.Finding, error) {
 }
 
 func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error) {
-	files := ctx.Request.MultipartFiles()
+	files := ScopedMultipartFiles(ctx.Request, ctx.ParameterScope)
 	if len(files) == 0 {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
@@ -35,7 +35,7 @@ func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error
 	total := 0
 	for _, file := range files {
 		attempts := 1
-		if multipartFieldNameLooksLikeFilename(file.FieldName) {
+		if multipartFieldNameLooksLikeFilename(file.FieldName, ctx.Rule(meta.ID).ParameterNames...) {
 			attempts = 2
 		}
 		total += len(variants) * attempts
@@ -77,7 +77,7 @@ func scanFileUpload(ctx *Context, meta model.PluginMeta) ([]model.Finding, error
 			tokenWasSent := contentReplaced || strings.Contains(filename, token)
 			renamedEvidence, renamedAccepted, accepted := uploadAccepted(ctx, response, filename, token, tokenWasSent, expected)
 			legacyFieldMutation := false
-			if multipartFieldNameLooksLikeFilename(file.FieldName) {
+			if multipartFieldNameLooksLikeFilename(file.FieldName, ctx.Rule(meta.ID).ParameterNames...) {
 				if !accepted {
 					var legacyRequest *httpraw.Request
 					var mutateErr error
@@ -193,7 +193,13 @@ func uploadAccepted(ctx *Context, response model.Response, filename, token strin
 	return renamedEvidence, renamedAccepted, accepted
 }
 
-func multipartFieldNameLooksLikeFilename(fieldName string) bool {
+func multipartFieldNameLooksLikeFilename(fieldName string, configured ...string) bool {
+	semanticCandidates := append([]string{
+		"file", "filename", "filepath", "path", "upload", "attachment", "document", "template", "resource", "image", "media",
+	}, configured...)
+	if controlledSemanticName(fieldName, semanticCandidates) {
+		return true
+	}
 	extension := filepath.Ext(strings.TrimSpace(fieldName))
 	return multipartFilenameLikePattern.MatchString(extension)
 }

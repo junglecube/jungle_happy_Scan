@@ -18,7 +18,7 @@ func (JWTActive) Meta() model.PluginMeta {
 
 func (p JWTActive) Scan(ctx *Context) ([]model.Finding, error) {
 	meta := p.Meta()
-	candidates := jwtCandidates(ctx.Request, ctx.Points)
+	candidates := jwtCandidatesScopedExcluded(ctx.Request, ctx.Points, ctx.ParameterScope, ctx.Config.ExcludedParameterNames)
 	total := max(1, len(candidates)*3)
 	done := 0
 	ctx.Progress(meta.ID, 0, total)
@@ -99,6 +99,14 @@ func (candidate jwtCandidate) mutate(request *httpraw.Request, value string) (*h
 // because the generic business insertion-point finder intentionally excludes
 // authentication fields from most active plugins.
 func jwtCandidates(request *httpraw.Request, points []httpraw.InsertionPoint) []jwtCandidate {
+	return jwtCandidatesScoped(request, points, nil)
+}
+
+func jwtCandidatesScoped(request *httpraw.Request, points []httpraw.InsertionPoint, scope []string) []jwtCandidate {
+	return jwtCandidatesScopedExcluded(request, points, scope, nil)
+}
+
+func jwtCandidatesScopedExcluded(request *httpraw.Request, points []httpraw.InsertionPoint, scope, excluded []string) []jwtCandidate {
 	var result []jwtCandidate
 	seen := make(map[string]bool)
 	add := func(candidate jwtCandidate) {
@@ -109,23 +117,34 @@ func jwtCandidates(request *httpraw.Request, points []httpraw.InsertionPoint) []
 		}
 	}
 	for _, header := range request.Headers {
+		if strings.EqualFold(header.Name, "Cookie") {
+			for index, part := range strings.Split(header.Value, ";") {
+				name, value, found := strings.Cut(strings.TrimSpace(part), "=")
+				cookiePoint := httpraw.InsertionPoint{Location: "cookie", Name: name, Path: name, Value: value, Occurrence: index, ValueType: "string"}
+				if httpraw.IsExcludedInsertionPoint(cookiePoint, excluded) || !httpraw.MatchesParameterScope(cookiePoint, scope) {
+					continue
+				}
+				raw, prefix, ok := bearerJWT(value)
+				if found && ok {
+					add(jwtCandidate{raw: raw, prefix: prefix, affected: cookiePoint.Label(), point: &cookiePoint})
+				}
+			}
+			continue
+		}
+		headerPoint := httpraw.InsertionPoint{Location: "header", Name: header.Name, Path: header.Name, Value: header.Value, ValueType: "string"}
+		if httpraw.IsExcludedInsertionPoint(headerPoint, excluded) || !httpraw.MatchesParameterScope(headerPoint, scope) {
+			continue
+		}
 		raw, prefix, ok := bearerJWT(header.Value)
 		if ok {
 			add(jwtCandidate{raw: raw, prefix: prefix, affected: "header:" + header.Name, header: header.Name})
 		}
-		if strings.EqualFold(header.Name, "Cookie") {
-			for index, part := range strings.Split(header.Value, ";") {
-				name, value, found := strings.Cut(strings.TrimSpace(part), "=")
-				raw, prefix, ok := bearerJWT(value)
-				if found && ok {
-					point := httpraw.InsertionPoint{Location: "cookie", Name: name, Path: name, Value: value, Occurrence: index, ValueType: "string"}
-					add(jwtCandidate{raw: raw, prefix: prefix, affected: point.Label(), point: &point})
-				}
-			}
-		}
 	}
 	for index := range points {
 		point := points[index]
+		if httpraw.IsExcludedInsertionPoint(point, excluded) {
+			continue
+		}
 		if point.Location == "header" || point.Location == "cookie" {
 			continue
 		}

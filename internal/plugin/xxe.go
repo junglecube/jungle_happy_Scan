@@ -28,20 +28,29 @@ func (p XXE) Scan(ctx *Context) ([]model.Finding, error) {
 
 func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, scanErr error) {
 	body := string(ctx.Request.Body)
-	if !strings.Contains(ctx.Request.ContentType(), "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") {
-		ctx.Progress(meta.ID, 1, 1)
-		return nil, nil
+	hasNestedXML := false
+	for _, point := range ctx.Points {
+		if point.Location == "nested_xml" && xxePoint(point) {
+			hasNestedXML = true
+			break
+		}
 	}
-	declaration := xmlDeclaration.FindString(body)
-	withoutDecl := xmlDeclaration.ReplaceAllString(body, "")
-	root := xmlRoot.FindStringSubmatch(withoutDecl)
-	if len(root) < 2 || strings.Contains(strings.ToUpper(withoutDecl), "<!DOCTYPE") {
+	if !strings.Contains(ctx.Request.ContentType(), "xml") && !strings.HasPrefix(strings.TrimSpace(body), "<") && !hasNestedXML {
 		ctx.Progress(meta.ID, 1, 1)
 		return nil, nil
 	}
 	points := make([]httpraw.InsertionPoint, 0)
 	for _, point := range ctx.Points {
-		if point.Location == "xml" || point.Location == "xml_cdata" {
+		if !xxePoint(point) {
+			continue
+		}
+		document, err := xxeDocument(ctx.Request, point)
+		if err != nil {
+			continue
+		}
+		withoutDecl := xmlDeclaration.ReplaceAllString(document, "")
+		root := xmlRoot.FindStringSubmatch(withoutDecl)
+		if len(root) >= 2 && !strings.Contains(strings.ToUpper(withoutDecl), "<!DOCTYPE") {
 			points = append(points, point)
 		}
 	}
@@ -76,6 +85,16 @@ func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, sca
 
 	done := 0
 	for _, point := range points {
+		originalDocument, err := xxeDocument(ctx.Request, point)
+		if err != nil {
+			continue
+		}
+		declaration := xmlDeclaration.FindString(originalDocument)
+		withoutDecl := xmlDeclaration.ReplaceAllString(originalDocument, "")
+		root := xmlRoot.FindStringSubmatch(withoutDecl)
+		if len(root) < 2 {
+			continue
+		}
 		for _, payload := range payloads {
 			token := randomID("xxe")
 			callbackToken, callbackURL := "", ""
@@ -110,7 +129,14 @@ func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, sca
 				ctx.Progress(meta.ID, done, total)
 				continue
 			}
-			documentBody := xmlDeclaration.ReplaceAllString(string(mutated.Body), "")
+			documentBody, documentErr := xxeDocument(mutated, point)
+			if documentErr != nil {
+				ctx.ResolveMutationFailed(1)
+				done++
+				ctx.Progress(meta.ID, done, total)
+				continue
+			}
+			documentBody = xmlDeclaration.ReplaceAllString(documentBody, "")
 			document := declaration
 			if declaration != "" {
 				document += "\n"
@@ -126,6 +152,15 @@ func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, sca
 				continue
 			}
 			request := mutated.WithBody([]byte(document))
+			if point.Location == "nested_xml" {
+				request, err = httpraw.MutateNestedXMLDocument(mutated, point, document)
+				if err != nil {
+					ctx.ResolveMutationFailed(1)
+					done++
+					ctx.Progress(meta.ID, done, total)
+					continue
+				}
+			}
 			response, sendErr := ctx.Send(request)
 			if payload.Kind == "callback" {
 				pending = append(pending, callbackProbe{token: callbackToken, rule: payload.Name, point: point.Label(), request: request, response: response})
@@ -154,6 +189,24 @@ func scanXXE(ctx *Context, meta model.PluginMeta) (findings []model.Finding, sca
 		}
 	}
 	return findings, nil
+}
+
+func xxeDocument(request *httpraw.Request, point httpraw.InsertionPoint) (string, error) {
+	if point.Location == "nested_xml" {
+		return httpraw.NestedXMLValue(request, point)
+	}
+	if point.Location == "xml" || point.Location == "xml_cdata" {
+		return string(request.Body), nil
+	}
+	return "", fmt.Errorf("不支持的 XXE 插入点 %q", point.Location)
+}
+
+func xxePoint(point httpraw.InsertionPoint) bool {
+	if point.Location == "xml" || point.Location == "xml_cdata" {
+		return true
+	}
+	return point.Location == "nested_xml" &&
+		(httpraw.NestedXMLLeafLocation(point) == "xml" || httpraw.NestedXMLLeafLocation(point) == "xml_cdata")
 }
 
 // CDATA is a container, not an entity expansion sink: replace the chosen

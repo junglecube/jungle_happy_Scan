@@ -1,6 +1,6 @@
-# jungle_happy_Scan V3.9.0 插件扫描与配置手册
+# jungle_happy_Scan V3.13.0 插件扫描与配置手册
 
-> 本文以 V3.9.0 为准。当前修复、业务规则及仅替换二进制升级详见 [V3.9.0 发布说明](RELEASE-v3.9.0.md)。HTTP 签名接口 JSON request 协议、SQL 快速与深度的差异、时间复核及旧配置升级见 2.2、5.8–5.9；其余章节保留对应能力的演进说明。
+> 本文以 V3.13.0 为准。参数解析/筛选和 URL 编码证据预览详见 [V3.13.0 发布说明](RELEASE-v3.13.0.md)；文件读取统一插件、受控参数名匹配见 [V3.12.0 发布说明](RELEASE-v3.12.0.md)；V3.10/V3.11 的 XXE、XSS 和 SQL 变更见对应发布说明。
 
 ## 1. 使用边界
 
@@ -27,10 +27,10 @@ jungle_happy_Scan 的目标是：输入一条 Burp Suite Raw HTTP 请求，在�
 
 - **Passive**：勾选三个被动响应分析插件，不发送漏洞 Payload。
 - **Normal**：默认勾选 SQL 快速、文件上传、文件读取、XSS、未授权、XXE、短信和敏感信息共 8 项；以持久配置 normal_plugins 为准。
-- **Deep**：从 48 个公开插件中选择 47 项，SQL 深度已包含快速，因此不重复勾选快速；同时包含其他漏洞族的扩展检测。
+- **Deep**：从 48 个公开插件中选择 46 项，SQL 深度和 XSS 深度已包含各自快速探针，因此不重复勾选快速插件；同时包含其他漏洞族的扩展检测。
 - **Custom**：使用当前手工勾选组合；按钮放在最后，手工增减任何预设后自动进入 Custom。
 
-V3.8.3 中，四种模式只是插件选择预设。前端提交最终 `scan_type` 插件 ID 数组；同一个插件不论由 Normal、Deep 还是 Custom 选中，都执行完全相同的请求序列。异步 API 为兼容旧客户端仍接受 `mode`，但它不会改变 Payload 强度。同步总接口继续通过 `scan_type: ["passive"|"normal"|"deep"]` 选择预设，服务端随即展开为插件 ID。
+V3.13.0 中，四种模式仍是插件选择预设；文件读取是一个公开插件，但会根据 Normal/Deep 选择基础或完整 payload 层级。前端在显式插件 ID 外同步提交当前模式，让统一文件读取保留快速/深度层级；其他插件不论由 Normal、Deep 还是 Custom 选中，都执行同一规则集。异步 API 为兼容旧客户端仍接受 `mode`，同步总接口继续通过 `scan_type: ["passive"|"normal"|"deep"]` 选择预设。
 
 扫描中心将插件按 SQL 与查询注入、文件与 XML、身份权限与会话、代码与表达式执行、服务端请求与跳转、API/框架/协议配置、响应与业务风险分组。桌面端每行显示两个插件卡片，名称、小字说明和风险类型始终可见；窄屏自动切换为单列。该分组只影响展示，不改变插件 ID、预设或 API。
 
@@ -108,9 +108,17 @@ JS 文件按 `node F-PMC.js -request <base64请求>` 执行，脚本必须只向
 
 命中后，该参数无论位于 Query、Form、JSON（对象、数组或嵌套对象）、Multipart 文本字段、Cookie，还是 `scan_header_names` 指定的 Header，都不会进入主动 Payload 插入点。若它本身装载 JSON/XML/Base64 文档，扫描器也不会继续展开内部字段。JSON 对象参数按完整路径的任意对象 Key 判断，例如排除 `content_string` 会同时排除 `content_string.id`、`items[0].content_string.value`。
 
+如果填写特殊名称 `Cookie`（不区分大小写），则整个请求 Cookie 集合都会被排除，包括 `Cookie: a=...; c=...` 中的所有子项；它不会只匹配名为 `Cookie` 的单个业务字段。该规则同样适用于从请求中直接派生的 JWT、会话和路径规范化候选。
+
 该配置只控制主动参数变异，不会删除原始报文内容，也不会阻止未授权插件识别配置的会话凭据。不要把真实鉴权 Key 加入排除列表来代替会话配置。
 
-### 3.2 会话 Key
+### 3.2 扫描前参数解析与筛选
+
+扫描引擎请求报文下方的“参数解析”按钮只调用 `POST /api/v1/parse`，不会访问目标。返回结果按当前勾选插件分别计算：SQL 只显示 SQL 插件实际会变异的点，文件上传显示文件字段，短信/SSRF/文件读取显示各自的语义候选，响应分析和固定路径插件则显示为空。持久配置的 `excluded_parameter_names` 在此之前已经过滤。
+
+解析结果会填入可编辑文本框，每行一个选择器，界面默认直接显示 `number`、`query:number`、`json:user.id`，不额外包裹方括号；手工输入时仍兼容 `[number]`、`[query:number]` 等写法。保存扫描时只提交保留的选择器到现有 `/api/v1/plan` 和 `/api/v1/scan` 的可选 `parameter_scope` 字段；清空文本框表示恢复全部候选。选择器采用不区分大小写的精确匹配，不会把 `id` 扩展成 `id2`。
+
+### 3.3 会话 Key
 
 `session_identifiers` 只需要配置 Key 名，不需要声明 Header、Cookie、Query、Form 或 JSON 位置。匹配不区分大小写，扫描器会在以下位置递归识别和删除/失效：
 
@@ -137,7 +145,7 @@ JS 文件按 `node F-PMC.js -request <base64请求>` 执行，脚本必须只向
 
 不要把普通业务字段如 `id`、`user` 配成会话 Key，否则未授权插件会删除业务输入并造成误判。
 
-### 3.2 动态响应归一化正则
+### 3.4 动态响应归一化正则
 
 `dynamic_patterns` 用于在响应相似度计算前删除每次都会变化的片段，例如时间戳、requestId、traceId、nonce。它不是漏洞检测规则。
 
@@ -152,14 +160,14 @@ JS 文件按 `node F-PMC.js -request <base64请求>` 执行，脚本必须只向
 
 过宽会抹掉真实差异，使布尔注入、越权等插件漏报。保存失败通常是 JSON 转义或正则语法错误；反斜杠在 JSON 字符串中必须写成 `\\`。
 
-### 3.3 成功与拒绝特征
+### 3.5 成功与拒绝特征
 
 - `success_patterns`：识别业务成功，如 `"code":"000000"`、`"success":true`。
 - `denied_patterns`：识别未登录、无权限、认证失败。
 
 这些规则直接影响未授权、CSRF、越权、GraphQL 等插件；`denied_patterns` 还用于 `jungle_happy_scan`/`lite` 同步接口的扫描前鉴权预检。预检匹配响应状态行和 Body，因此统一返回 `200` 的“登录失败”也应配置在这里。应添加系统真实返回码或中文提示，同时避免只写过短词语，如 `error`、`fail`。
 
-### 3.4 基线、预算和并发
+### 3.6 基线、预算和并发
 
 每个任务需要 `baseline_samples` 个基线，默认 2 个。同步接口的连通性成功响应直接作为第一个基线，因此不会把状态变更原始请求无意义地重复发送。动态归一化后计算基线稳定度：
 
@@ -680,15 +688,17 @@ expr {{left}} + {{right}}
 
 ## 5.17 任意文件读取（`file_read`）
 
-候选来自配置参数名或参数值中的路径结构。目标文件仍为 Linux 的 passwd、hosts、proc/version、os-release；不包含 Windows 文件探针。响应指纹支持原始 Body、JSON 字符串和 Base64 包装。
+候选来自配置参数名或参数值中的路径结构。目标文件仍为 Linux 的 passwd、hosts、proc/version、os-release；不包含 Windows 文件探针。响应指纹支持原始 Body、JSON 字符串和 Base64 包装。V3.12 将原来的 `file_read_encoded` 规则合并到这个插件：Normal 使用基础绝对路径/目录穿越，Deep 在同一插件中追加 URL 编码、双重编码、混合编码、分号路径、点号归一化和 `file://`/`file://localhost` URI 变体。
+
+参数名使用受控模糊匹配。除了原有的精确和后缀匹配，还识别分隔符、数字索引及有限业务修饰词，因此 `filename1`、`file_name[0]`、`downloadPath` 和 `pathValue` 可以命中配置中的 `filename`、`file` 或 `path`；任意包含词不会直接触发扫描。
 
 首次命中且基线不存在该指纹后，发送随机不存在路径；对照没有同一指纹时，再重复原始探针。三份证据共同支持确认，固定诊断页不会仅因重复命中而确认。自定义 expected 应使用完整行结构等强指纹。
-
-`file_read_encoded` 保留双重编码、非标准归一化和 file URI 规则，使用同样的对照机制。
 
 ## 5.18 危险文件上传（`file_upload`）
 
 枚举 Multipart 文件 Part。普通规则保留原内容，只变更文件名／MIME；兼容文件名式 field name 的旧 Servlet。业务失败和明确类型拒绝优先；正常上传基线已包含成功信息不会阻止再次判断危险类型的接受情况。单纯回显提交文件名或返回 path 不再证明成功。
+
+multipart 字段名使用同一套受控模糊匹配，默认覆盖 `file`、`filename`、`filepath`、`upload`、`attachment`、`document`、`template`、`resource`、`image` 和 `media`，因此 `uploadFile1`、`file_name[0]` 等常见业务字段仍会进入兼容 field-name 变异；不会对所有文本字段发送上传请求。
 
 业务接受为中危、待确认；新出现的服务端重命名危险后缀为高危、较确定。若同源读取与原文件字节完全一致，记录 SHA-256 并报告高危、已确认。`file_upload_execution` 的随机算术 JSP 只有回读得到正确乘积且不是源码，才报告严重、已确认。最终定级不再被覆盖为低危。
 
@@ -741,11 +751,11 @@ https://jungle-happy-scan.invalid/{{token}}
 
 是否添加编码变体应根据网关解码行为决定；Header 名必须与 Payload 注入的 Header 完全对应。
 
-## 5.22 反射型 XSS（`reflected_xss`）
+## 5.22 反射型 XSS（`reflected_xss`、`reflected_xss_deep`）
 
-先用唯一标记定位每个反射上下文，再逐位置测试配置 payload。安全编码副本不否定其他位置的原始反射；测试响应再次检查 HTML MIME。支持属性、脚本字符串、脚本注释以及注释、textarea/title/style 等结束标签闭合；HTML 属性中的反斜杠不会被当成引号转义。
+两个插件都先用唯一标记定位每个反射上下文，再逐位置测试配置 Payload。快速插件覆盖常见 `<img src=x onerror=...>`、`<details open ontoggle=...>` 和标签闭合；深度插件包含快速探针，另外覆盖无引号属性、反引号函数、`Object.bind`、`Symbol.replace`、脚本字符串/代码上下文以及自索引一行式 Payload。深度选择会自动去重快速插件，避免重复请求。
 
-报告低危、较确定的原始反射候选，不声称浏览器执行。尚未增加 DOM／存储型 XSS 或浏览器执行复核。
+扫描器逐个原始反射位置匹配完整 Payload，编码回显、XML/JSON 包装或其他位置的副本不会替代执行上下文；响应会再次检查 HTML MIME，并记录隐藏容器和 CSP 对当前内联 Payload 的影响。报告低危、较确定的原始反射候选，不声称浏览器执行；尚未增加 DOM／存储型 XSS 或真实浏览器执行复核。
 
 ## 5.23 敏感信息泄露（`sensitive_data`）
 
@@ -956,11 +966,11 @@ jungle.happy.scan.SafeModeProbe731
 
 ## 5.32 短信轰炸/喷洒（`sms_abuse`）
 
-URL 必须匹配插件 url_keywords，且参数名符合手机号语义。已有自定义路由关键词继续沿用。
+URL 必须匹配插件 url_keywords，且参数名符合手机号语义。手机号参数使用受控模糊匹配，覆盖 `phonekey`、`mobileNo1`、`receiver_mobile` 等数字索引、分隔符和有限修饰词；已有自定义路由关键词继续沿用。这样不会把任意包含 `phone` 的普通字段当作短信参数。
 
 同号码请求数、成功次数阈值和观察窗口在前台响应语义中配置，默认 30／5／60 秒。仅明确业务成功计数，失败优先，未知不计入；仍不声称真实短信到达。喷洒只使用配置的 spray_number 号码池，不隐式补足，空池关闭喷洒。
 
-请求受全局及目标并发／RPS 管理。证据记录实际发送偏移；窗口不足、未形成请求重叠或测试号码不足会展示覆盖不完整。详细规则 JSON 示例见 V3.9.0 发布说明。
+请求受全局及目标并发／RPS 管理。证据记录实际发送偏移；窗口不足、未形成请求重叠或测试号码不足会展示覆盖不完整。详细规则 JSON 示例见 V3.12.0 发布说明。
 
 ## 5.33 Apache Shiro RememberMe（`shiro`）
 
@@ -1122,11 +1132,9 @@ URL 必须匹配插件 url_keywords，且参数名符合手机号语义。已有
 
 配置 `callback_base_url` 为目标可访问地址；新增规则时使用 `{{callback}}`，不要填写公网第三方服务。无法出站只代表没有观察到回连，不等于安全。
 
-## 5.43 任意文件读取编码绕过（`file_read_encoded`）
+## 5.43 文件读取旧 ID 兼容
 
-承接双重 URL 编码、`....//` 路径归一化和 `file://` URI 变体。参数候选与核心 `file_read` 分开配置；默认迁移会复制候选名。每个 Payload 的 `expected` 必须是文件强指纹，首次命中后同一请求再确认一次。
-
-增加规则时优先选择 Linux 稳定文件，并使用完整行结构；不要只匹配 `root`、`localhost`、`Linux`。如果应用先解码两次再归一化路径，可在这里增加对应编码层数，同时关注网关对 `%25` 的提前拒绝。
+`file_read_encoded` 不再是独立插件或独立配置区。旧 API 仍接受这个 ID，并把请求映射到统一的 `file_read` 深度扫描；旧配置启动迁移时，其参数名、路径、payload 和正则会合并进 `file_read`，编码规则标记为 deep。新规则请直接添加到 `file_read`，并使用完整文件行结构作为 `expected`，不要只匹配 `root`、`localhost` 或 `Linux`。
 
 ## 5.44 文件上传执行确认（`file_upload_execution`）
 

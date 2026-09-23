@@ -1,6 +1,31 @@
-# jungle_happy_Scan V3.9.0
+# jungle_happy_Scan V3.13.0
 
-当前源码版本：`v3.9.0`。
+当前源码版本：`v3.13.0`。
+
+## V3.13.0 更新
+
+- 漏洞证据中的请求报文增加 URL/form 参数可读解码预览，同时保留实际发送的 URL 编码报文，便于阅读和复现。
+- 扫描引擎新增“参数解析”按钮：按已选插件列出实际可变异参数，文本框支持 `[name]` 或 `[location:name]` 精确筛选；留空保持全量扫描，持久配置排除项始终生效。
+- 复用现有 `/api/v1/parse`、`/api/v1/plan` 和 `/api/v1/scan` 路由，`parameter_scope` 是向后兼容的可选字段；替换可执行文件即可沿用原 config。
+- [V3.13.0 配置与升级说明](docs/RELEASE-v3.13.0.md)。
+
+## V3.12.0 更新
+
+- 合并 `file_read` 与旧 `file_read_encoded`：单一文件读取插件按 Normal/Deep 选择 payload 层级，覆盖 URL/双重/混合编码、分号路径和 file URI 等常用 Linux 绕过；旧 ID 仍可作为深度兼容别名使用。
+- 文件读取、文件上传和短信参数名采用受控模糊匹配，覆盖 `filename1`、`file_name[0]`、`phonekey` 等业务字段，同时保留语义边界避免无界 substring 误触发。
+- 持久配置插件卡片改为一行两列并显示英文名，详情在原位置二级展开；旧 config 自动迁移到配置版本 35。
+- [V3.12.0 配置与升级说明](docs/RELEASE-v3.12.0.md)。
+
+## V3.11.0 更新
+
+- 反射型 XSS 拆分快速与深度插件，补齐 IMG/onerror、details/ontoggle、属性/脚本上下文和常见一行式 Payload，并按原始反射位置匹配证据。
+- 新增 `reflected_xss_deep`，选择深度时自动去重快速插件；旧 config 自动迁移到配置版本 34，替换可执行文件即可升级。
+- [V3.11.0 配置与升级说明](docs/RELEASE-v3.11.0.md)。
+
+## V3.10.0 更新
+
+- 修复表单中嵌套 XML 的 XXE 识别，并扩展 XSS 对 XML/JSON 包装响应、属性上下文、CSP 和隐藏元素的语义判断。
+- [V3.10.0 配置与升级说明](docs/RELEASE-v3.10.0.md)。
 
 ## V3.9.0 更新
 
@@ -143,7 +168,7 @@ SCANNER_INSTALL_DIR=/opt/jungle_happy_Scan ./install_jungle_happy_Scan.sh
 
 安装脚本自动识别操作系统和 CPU 架构，选择包内二进制并启动服务。整个安装过程不连接互联网。
 
-从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.8.3，并验证 `-version` 与 `/api/health`；`config/`、客户端证书、签名脚本和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
+从 V2.4/V3.x 原目录升级时仍将 `SCANNER_INSTALL_DIR` 指向原安装目录。脚本先校验交付包和当前平台二进制，再停止旧 PID、原子替换、启动 V3.13.0，并验证 `-version` 与 `/api/health`；`config/`、客户端证书、签名脚本和 `var/` 不包含在交付包中，不会被归档内容覆盖。若管理端口不是默认值，可通过 `SCANNER_HEALTH_URL` 指定健康检查地址。
 
 页面和健康检查：
 

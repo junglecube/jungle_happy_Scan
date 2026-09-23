@@ -654,7 +654,7 @@ func (s *Server) plugins(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) pluginsV2(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "rule_pack_version": "3.8.3", "rule_pack_digest": s.rulePackDigest(), "plugins": plugin.Metadata()})
+	writeJSON(w, http.StatusOK, map[string]any{"api_version": "2.0", "rule_pack_version": "3.13.0", "rule_pack_digest": s.rulePackDigest(), "plugins": plugin.Metadata()})
 }
 
 func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
@@ -806,9 +806,22 @@ func (s *Server) parse(w http.ResponseWriter, r *http.Request) {
 		request = request.WithScheme(scheme)
 	}
 	requestURL, _ := request.URL()
+	points := httpraw.DiscoverAdvanced(request, cfg)
+	pluginParameters := make(map[string][]httpraw.ParameterDescriptor)
+	if len(input.SelectedPlugins()) > 0 {
+		selected, selectErr := plugin.Select(input.SelectedPlugins(), input.SelectedMode())
+		if selectErr != nil {
+			writeError(w, http.StatusBadRequest, selectErr.Error())
+			return
+		}
+		for _, item := range selected {
+			meta := item.Meta()
+			pluginParameters[meta.ID] = plugin.ParameterCandidates(item, request, points, cfg)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"method": request.Method, "url": requestURL, "host": request.Host(),
-		"content_type": request.ContentType(), "insertion_points": httpraw.DiscoverAdvanced(request, cfg),
+		"content_type": request.ContentType(), "insertion_points": points, "plugin_parameters": pluginParameters,
 	})
 }
 
@@ -1021,7 +1034,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
-			result["rule_pack_version"] = "3.8.3"
+			result["rule_pack_version"] = "3.13.0"
 			result["rule_pack_digest"] = s.rulePackDigest()
 			result["findings"] = []v2Finding{}
 		}
@@ -1043,7 +1056,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 		}
 		if apiV2 {
 			result["api_version"] = "2.0"
-			result["rule_pack_version"] = "3.8.3"
+			result["rule_pack_version"] = "3.13.0"
 			result["rule_pack_digest"] = s.rulePackDigest()
 			result["findings"] = []v2Finding{}
 		}
@@ -1079,7 +1092,7 @@ func (s *Server) jungleHappyScanResponse(w http.ResponseWriter, r *http.Request,
 	}
 	if apiV2 {
 		result["api_version"] = "2.0"
-		result["rule_pack_version"] = "3.8.3"
+		result["rule_pack_version"] = "3.13.0"
 		result["rule_pack_digest"] = s.rulePackDigest()
 		result["findings"] = convertV2Findings(findings, lite)
 	}

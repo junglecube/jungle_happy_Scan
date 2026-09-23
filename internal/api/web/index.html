@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="面向银行 Java Web 接口的高置信度漏洞扫描器">
-  <title>jungle_happy_Scan · V3.9.0</title>
-  <link rel="stylesheet" href="/styles.css?v=3.9.0">
-  <link rel="stylesheet" href="/v11.css?v=3.9.0-settings2">
-  <link rel="stylesheet" href="/webscan.css?v=3.9.0">
+  <title>jungle_happy_Scan · V3.13.0</title>
+  <link rel="stylesheet" href="/styles.css?v=3.13.0">
+  <link rel="stylesheet" href="/v11.css?v=3.13.0-parameters1">
+  <link rel="stylesheet" href="/webscan.css?v=3.13.0">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="jungle_happy_Scan 首页">
       <img class="brand-logo" src="/jungle.jpg?v=1.1" alt="jungle_happy_Scan Logo">
-      <span><strong>jungle_happy_Scan</strong><small>V3.9.0</small></span>
+      <span><strong>jungle_happy_Scan</strong><small>V3.13.0</small></span>
     </a>
     <nav aria-label="主导航">
       <button class="nav-button active" data-view="proxy">代理设置</button>
@@ -170,6 +170,15 @@
           </div>
           <div class="http-editor" id="http-editor">
             <div id="http-request" class="cm-http-editor" aria-label="Burp Suite HTTP 报文"></div>
+          </div>
+          <div class="parameter-scope-panel">
+            <div class="parameter-scope-head">
+              <div><strong>参与扫描的参数</strong><small id="parameter-parse-help">点击“参数解析”只解析当前报文，不发送请求；留空表示扫描全部可用参数。</small></div>
+            </div>
+            <div class="parameter-scope-controls">
+              <textarea id="scan-parameters" class="parameter-scope-input" spellcheck="false" aria-label="参与扫描的参数" placeholder="点击“参数解析”后显示参数，例如：&#10;number&#10;query:userId"></textarea>
+              <button type="button" class="test-button" id="parse-parameters">参数解析</button>
+            </div>
           </div>
           <div id="brute-options" class="brute-options hidden">
             <label>并发数<input id="brute-concurrency" type="number" min="1" max="100" value="10"></label>
@@ -379,19 +388,51 @@
       </div>
 
       <div class="release-summary panel">
-        <div><span>当前版本</span><strong>V3.9.0</strong></div>
+        <div><span>当前版本</span><strong>V3.13.0</strong></div>
         <div><span>实现语言</span><strong>Go 1.26</strong></div>
 	        <div><span>漏洞插件</span><strong>48 个</strong></div>
         <div><span>运行依赖</span><strong>零依赖</strong></div>
       </div>
 
-	      <div class="release-timeline">
+      <div class="release-timeline">
         <article class="release-entry">
           <div class="release-marker"><span></span></div>
           <div class="release-content panel">
-            <header><div><span class="release-tag">CURRENT</span><h2>V3.9.0</h2></div><time datetime="2026-09-12">2026-09-12</time></header>
-            <p class="release-lead">修复扫描判定、补全请求对照与迟到回连，业务成功／失败规则可在持久配置中管理。</p>
-            <div class="release-groups"><section><h3>扫描准确性</h3><ul><li>短信失败优先；修复 XXE 文档和 CDATA，上传执行保留真实等级。</li><li>XSS 逐位置检查；文件读取增加不存在路径对照；SQL 深度先覆盖各参数。</li><li>敏感信息按 validator 校验；分数不升级确认状态。</li></ul></section><section><h3>配置与升级</h3><ul><li>前台配置业务规则、短信阈值和回连等待窗口。</li><li>替换二进制并重启，沿用原 config；首次自动备份并迁移到版本 33。</li></ul></section></div>
+            <header><div><span class="release-tag">CURRENT</span><h2>V3.13.0</h2></div><time datetime="2026-09-21">2026-09-21</time></header>
+            <p class="release-lead">让扫描证据更易读，并支持在发送扫描前按当前插件精确选择参数。</p>
+            <div class="release-groups"><section><h3>参数解析与筛选</h3><ul><li>扫描引擎新增“参数解析”按钮，只调用报文解析接口，不访问目标；结果按已选插件展示。</li><li>文本框默认直接显示 <code>name</code>、<code>query:name</code> 或 <code>json:path</code>，手工输入仍兼容方括号写法；编辑后只变异保留的参数，留空保持原有全量行为。</li><li>持久配置排除参数在解析和实际扫描中均不会出现；填写 <code>Cookie</code> 会排除整个 Cookie 集合，文件上传和会话凭据等特殊候选也遵循筛选。</li></ul></section><section><h3>证据与升级</h3><ul><li>漏洞结果增加 URL/form 参数的可读解码预览，并保留实际发送的 URL 编码报文供复现；所有预览按纯文本安全渲染。</li><li>不新增接口，旧客户端可继续提交原请求体；只替换 V3.13.0 可执行文件并重启即可沿用原 config。</li></ul></section></div>
+          </div>
+        </article>
+        <article class="release-entry">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.12.0</h2></div><time datetime="2026-09-20">2026-09-20</time></header>
+            <p class="release-lead">合并文件读取快速与深度插件，补齐常见编码和路径归一化绕过，并统一三类业务参数的受控模糊匹配。</p>
+            <div class="release-groups"><section><h3>文件读取与参数匹配</h3><ul><li>移除公开的 <code>file_read_encoded</code> 卡片，单一文件读取插件按 Normal/Deep 选择请求层级；旧 ID 仍作为深度兼容别名接受。</li><li>新增 URL 编码、双重编码、混合编码、分号路径、file URI 和 localhost URI 等 Linux 常用绕过。</li><li>文件读取、文件上传和短信参数名支持受控模糊匹配，例如 <code>filename1</code>、<code>file_name[0]</code>、<code>phonekey</code>，仍要求语义词或受控修饰词边界。</li></ul></section><section><h3>前端与升级</h3><ul><li>插件配置卡片改为带英文名的一行两列布局，展开详情占整行并可再次点击收起。</li><li>旧 config 自动迁移到配置版本 35；替换可执行文件并重启即可沿用原配置。</li></ul></section></div>
+          </div>
+        </article>
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.11.0</h2></div><time datetime="2026-09-18">2026-09-18</time></header>
+            <p class="release-lead">反射型 XSS 拆分为快速与深度检测，补齐常见 HTML 事件和一行式变体，并保持原 config 可直接升级。</p>
+            <div class="release-groups"><section><h3>XSS 快速与深度</h3><ul><li>快速模式先用唯一标记定位反射上下文，再验证 IMG/onerror、details/ontoggle 等低成本 Payload。</li><li>深度模式包含快速 Payload，并增加无引号属性、反引号函数、Object.bind、Symbol.replace、脚本上下文和自索引一行式 Payload。</li><li>逐个原始反射位置匹配完整 Payload，避免 XML/JSON 包装、编码副本或其他位置干扰判断；记录可见性和 CSP 影响。</li></ul></section><section><h3>配置与升级</h3><ul><li>新增 <code>reflected_xss_deep</code> 插件；选择深度时自动去重快速插件，旧配置规则保留并补齐新默认规则。</li><li>替换二进制并重启即可沿用原 config；首次启动自动备份并迁移到配置版本 34。</li></ul></section></div>
+          </div>
+        </article>
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.10.0</h2></div><time datetime="2026-09-16">2026-09-16</time></header>
+            <p class="release-lead">修复 XXE 表单嵌套 XML 识别与 XSS 响应上下文判断，扩展对包装 XML/JSON 内容的反射检测。</p>
+            <div class="release-groups"><section><h3>XXE</h3><ul><li>对 <code>application/x-www-form-urlencoded</code> 中的 XML 参数建立嵌套 XML 插入点，不再因整体 Content-Type 不是 XML 而跳过。</li><li>识别表单中多个键值、CDATA 和 XML 包装节点，保持实体文件与回连规则的差分确认。</li></ul></section><section><h3>XSS</h3><ul><li>考虑隐藏元素、CSP 和 HTML 属性上下文，避免把不可执行的回显直接当作可利用结果。</li><li>递归检查 HTML/XML 包装节点中的 JSON 字符串，覆盖 <code>Field</code>、<code>result</code> 等常见业务响应结构。</li></ul></section></div>
+          </div>
+        </article>
+        <article class="release-card">
+          <div class="release-marker"><span></span></div>
+          <div class="release-content panel">
+            <header><div><span class="release-tag">PREVIOUS</span><h2>V3.9.0</h2></div><time datetime="2026-09-14">2026-09-14</time></header>
+            <p class="release-lead">统一业务响应成功/失败语义配置，完善未授权扫描判定，并让持久配置前端按公共区和插件卡片分组编辑。</p>
+            <div class="release-groups"><section><h3>响应语义</h3><ul><li>前台使用业务成功、业务失败关键词编辑框，保存时兼容既有业务规则和旧字段。</li><li>业务失败优先于 HTTP 200，避免“未知异常，请联系管理员”等失败响应被误报为成功。</li></ul></section><section><h3>持久配置与部署</h3><ul><li>插件详情在当前位置二级展开，不再跳转页面；公共配置和插件配置保持同一保存入口。</li><li>配置升级自动备份，支持只替换可执行文件的部署方式。</li></ul></section></div>
           </div>
         </article>
         <article class="release-card current">
@@ -1126,8 +1167,8 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/codemirror.js?v=3.9.0" defer></script>
-  <script src="/app.js?v=3.9.0-settings2" defer></script>
-  <script src="/webscan.js?v=3.9.0" defer></script>
+  <script src="/codemirror.js?v=3.13.0" defer></script>
+  <script src="/app.js?v=3.13.0-parameters1" defer></script>
+  <script src="/webscan.js?v=3.13.0" defer></script>
 </body>
 </html>
